@@ -1,0 +1,49 @@
+{
+  "name": "tech-blog-engine",
+  "version": "0.1.0",
+  "description": "5년차 엔지니어를 위한 고품질 마크다운 기술 블로그 생성 엔진",
+  "type": "module",
+  "bin": {
+    "tech-blog": "./dist/bin/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/bin/index.ts",
+    "build": "tsc",
+    "start": "node dist/bin/index.js",
+    "test": "vitest run",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
+  },
+  "keywords": [
+    "tech-blog",
+    "ai",
+    "markdown",
+    "cli",
+    "generator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@ai-sdk/anthropic": "^1.1.10",
+    "@ai-sdk/google": "^1.1.17",
+    "@ai-sdk/openai": "^1.1.13",
+    "ai": "^4.1.46",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "dotenv": "^16.4.7",
+    "execa": "^9.5.2",
+    "gray-matter": "^4.0.3",
+    "ora": "^8.2.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.9",
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.6"
+  }
+}
