@@ -1,7 +1,5 @@
 # Tech Blog Engine
 
-> **5년차 엔지니어가 동료 엔지니어에게 공유하고 싶은, 밀도 높고 타협 없는 마크다운 기술 블로그 생성 엔진**
-
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
 [![Biome](https://img.shields.io/badge/Biome-2.5+-60a5fa.svg)](https://biomejs.dev/)
