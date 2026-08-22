@@ -1,5 +1,7 @@
+import { z } from 'zod';
 import type { LLMProvider } from '../../providers/types.js';
-import { SOUL_SYSTEM_PROMPT } from '../soul-prompt.js';
+import { generateStructured } from '../../utils/structured.js';
+import { createSystemPrompt, type StageOptions } from '../language.js';
 
 export interface AngleResult {
   title: string;
@@ -10,62 +12,92 @@ export interface AngleResult {
   keyQuestions: string[];
 }
 
+const angleSchema = z.object({
+  title: z.string().trim().min(1),
+  coreProblem: z.string(),
+  targetAngle: z.string(),
+  narrativeArchetype: z.string().trim().min(1),
+  narrativeStrategy: z.string(),
+  keyQuestions: z.array(z.string()),
+});
+
+const angleJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'title',
+    'coreProblem',
+    'targetAngle',
+    'narrativeArchetype',
+    'narrativeStrategy',
+    'keyQuestions',
+  ],
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    coreProblem: { type: 'string' },
+    targetAngle: { type: 'string' },
+    narrativeArchetype: { type: 'string', minLength: 1 },
+    narrativeStrategy: { type: 'string' },
+    keyQuestions: { type: 'array', items: { type: 'string' } },
+  },
+};
+
 export async function extractAngle(
   input: string,
   provider: LLMProvider,
+  options: StageOptions,
   style?: string,
 ): Promise<AngleResult> {
   const prompt = `
-다음 입력(주제 또는 메모)을 검토하고, 동료 엔지니어들이 가장 흥미롭게 읽을 수 있는 [글의 방향성과 서사 전략]을 당신의 판단으로 자유롭게 설계하세요.
+Review the following topic or notes and design the most appropriate direction and narrative strategy for a technical article.
 
-[입력 내용]
+[Input]
 ${input}
-${style ? `[참고 스타일 요청]: ${style}` : ''}
+${style ? `[Requested style]: ${style}` : ''}
 
-반드시 아래 JSON 형식으로 응답하세요:
+Respond with JSON matching this shape:
 
 {
-  "title": "명확하고 매력적인 기술 블로그 제목",
-  "coreProblem": "이 글이 다루는 핵심 문제 또는 기술적 쟁점",
-  "targetAngle": "5년차 엔지니어가 공감할 깊이 있는 기술적 시각",
-  "narrativeArchetype": "주제에 가장 자연스러운 글의 성격 (예: 트러블슈팅 회고, 런타임 딥다이브, 아키텍처 비교, 성능 개선 여정, 기술 에세이 등)",
-  "narrativeStrategy": "독자를 몰입시키기 위한 이 글만의 자연스러운 이야기 전개 방식",
+  "title": "A clear and compelling article title",
+  "coreProblem": "The central problem or technical question",
+  "targetAngle": "The perspective and depth appropriate for the audience defined by the system instructions",
+  "narrativeArchetype": "The form that best fits the topic, such as an incident retrospective, runtime deep dive, architecture comparison, optimization journey, or technical essay",
+  "narrativeStrategy": "A narrative strategy tailored to this article",
   "keyQuestions": [
-    "글에서 다룰 핵심 질문들"
+    "The key questions the article should answer"
   ]
 }
 `;
 
-  const response = await provider.generate(prompt, {
-    systemPrompt: SOUL_SYSTEM_PROMPT,
-    temperature: 0.6,
-  });
+  const fallback =
+    options.language === 'ko'
+      ? {
+          title: input.slice(0, 50),
+          coreProblem: input,
+          targetAngle: '심층 기술 분석',
+          narrativeArchetype: '심층 분석',
+          narrativeStrategy: '문제 정의 및 내부 메커니즘 분석',
+          keyQuestions: ['왜 이런 현상이 발생하는가?'],
+        }
+      : {
+          title: input.slice(0, 50),
+          coreProblem: input,
+          targetAngle: 'In-depth technical analysis',
+          narrativeArchetype: 'Deep analysis',
+          narrativeStrategy:
+            'Define the problem and examine its internal mechanisms',
+          keyQuestions: ['Why does this behavior occur?'],
+        };
 
-  try {
-    const cleaned = response
-      .replace(/^```json\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-    const parsed = JSON.parse(cleaned);
-    return {
-      title: parsed.title || '기술 아티클',
-      coreProblem: parsed.coreProblem || '',
-      targetAngle: parsed.targetAngle || '',
-      narrativeArchetype: parsed.narrativeArchetype || '심층 분석',
-      narrativeStrategy:
-        parsed.narrativeStrategy || '자연스러운 기술 탐구 서사',
-      keyQuestions: Array.isArray(parsed.keyQuestions)
-        ? parsed.keyQuestions
-        : [],
-    };
-  } catch {
-    return {
-      title: input.slice(0, 50),
-      coreProblem: input,
-      targetAngle: '심층 기술 분석',
-      narrativeArchetype: '심층 분석',
-      narrativeStrategy: '문제 정의 및 내부 메커니즘 분석',
-      keyQuestions: ['왜 이런 현상이 발생하는가?'],
-    };
-  }
+  return generateStructured({
+    provider,
+    prompt,
+    generateOptions: {
+      systemPrompt: createSystemPrompt(options.language),
+      temperature: 0.6,
+      jsonSchema: angleJsonSchema,
+    },
+    schema: angleSchema,
+    fallback,
+  });
 }

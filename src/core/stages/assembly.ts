@@ -1,6 +1,9 @@
 import matter from 'gray-matter';
+import { z } from 'zod';
 import type { LLMProvider } from '../../providers/types.js';
-import { SOUL_SYSTEM_PROMPT } from '../soul-prompt.js';
+import { formatLocalDate } from '../../utils/date.js';
+import { generateStructured } from '../../utils/structured.js';
+import { createSystemPrompt, type StageOptions } from '../language.js';
 import type { AngleResult } from './angle.js';
 
 export interface FrontmatterData {
@@ -17,6 +20,29 @@ export interface AssemblyResult {
   frontmatter: FrontmatterData;
 }
 
+const metadataSchema = z.object({
+  title: z.string().trim().min(1),
+  description: z.string().trim().min(1),
+  tags: z.array(z.string().trim().min(1)).min(1),
+  category: z.string().trim().min(1),
+});
+
+const metadataJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'description', 'tags', 'category'],
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    description: { type: 'string', minLength: 1 },
+    tags: {
+      type: 'array',
+      minItems: 1,
+      items: { type: 'string', minLength: 1 },
+    },
+    category: { type: 'string', minLength: 1 },
+  },
+};
+
 function calculateReadingTime(text: string): string {
   const words = text.trim().split(/\s+/).length;
   const minutes = Math.max(1, Math.ceil(words / 200));
@@ -27,57 +53,61 @@ export async function assembleMarkdown(
   angle: AngleResult,
   polishedBody: string,
   provider: LLMProvider,
+  options: StageOptions,
 ): Promise<AssemblyResult> {
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalDate();
   const readingTime = calculateReadingTime(polishedBody);
 
   const prompt = `
-다음 기술 블로그 본문을 분석하여 메타데이터(Frontmatter)를 생성하세요.
+Analyze the following technical article and generate its frontmatter metadata.
 
-[제목]
+[Title]
 ${angle.title}
 
-[본문 발췌 (앞부분 1000자)]
+[Article excerpt: first 1,000 characters]
 ${polishedBody.slice(0, 1000)}
 
-[요구사항]
-- 5년차 개발자가 검색하거나 소셜에 공유되었을 때 클릭하고 싶을 만큼 명확하고 직관적인 설명(description)과 관련 태그(tags)를 도출하세요.
-- 반드시 아래 JSON 형식으로만 응답하세요:
+[Requirements]
+- Write a clear description that helps the intended audience understand the article's value and scope from a search result or shared link.
+- Preserve established product and technology names in tags.
+- Respond only with JSON matching this shape:
 
 {
   "title": "${angle.title.replace(/"/g, '\\"')}",
-  "description": "1~2문장의 핵심 기술 요약 및 이 글을 통해 얻을 수 있는 인사이트",
+  "description": "A one- or two-sentence technical summary and the insight the reader will gain",
   "tags": ["Tag1", "Tag2", "Tag3"],
   "category": "Backend"
 }
 `;
 
-  let metadata: Partial<FrontmatterData> = {};
-  try {
-    const response = await provider.generate(prompt, {
-      systemPrompt: SOUL_SYSTEM_PROMPT,
+  const fallbackDescription =
+    options.language === 'ko'
+      ? `${angle.title}에 대한 심층 분석 및 실무 가이드`
+      : `An in-depth analysis and practical guide to ${angle.title}`;
+
+  const metadata = await generateStructured({
+    provider,
+    prompt,
+    generateOptions: {
+      systemPrompt: createSystemPrompt(options.language),
       temperature: 0.3,
-    });
-    const cleaned = response
-      .replace(/^```json\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-    metadata = JSON.parse(cleaned);
-  } catch {
-    metadata = {
+      jsonSchema: metadataJsonSchema,
+    },
+    schema: metadataSchema,
+    fallback: {
       title: angle.title,
-      description: `${angle.title}에 대한 심층 분석 및 실무 가이드`,
+      description: fallbackDescription,
       tags: ['Engineering', 'Tech'],
       category: 'Engineering',
-    };
-  }
+    },
+  });
 
   const frontmatter: FrontmatterData = {
-    title: metadata.title || angle.title,
-    description: metadata.description || `${angle.title} 심층 분석`,
+    title: metadata.title,
+    description: metadata.description,
     date: today,
-    tags: Array.isArray(metadata.tags) ? metadata.tags : ['Engineering'],
-    category: metadata.category || 'Engineering',
+    tags: metadata.tags,
+    category: metadata.category,
     readingTime,
   };
 
