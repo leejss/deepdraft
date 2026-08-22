@@ -12,41 +12,59 @@ export class CodexProvider implements LLMProvider {
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
     const fullPrompt = options?.systemPrompt
-      ? `Instructions:\n${options.systemPrompt}\n\nTask:\n${prompt}\n\n중요: 필요한 최소한의 검증을 신속히 완료한 후, 요구된 마크다운 결과물을 즉시 출력하세요.`
+      ? `Instructions:\n${options.systemPrompt}\n\nTask:\n${prompt}\n\nReturn the requested result directly after performing only the validation necessary for the task.`
       : prompt;
 
-    const tempOutputFile = path.join(
-      os.tmpdir(),
-      `codex_output_${Date.now()}_${Math.random().toString(36).slice(2)}.txt`,
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'deepdraft-codex-'),
     );
+    const tempOutputFile = path.join(tempDir, 'output.txt');
+    const schemaFile = path.join(tempDir, 'schema.json');
 
     const args = [
       'exec',
-      '--dangerously-bypass-approvals-and-sandbox',
+      '--sandbox',
+      'read-only',
       '--ephemeral',
+      '--ignore-user-config',
+      '--skip-git-repo-check',
+      '--color',
+      'never',
+      '-C',
+      tempDir,
       '-o',
       tempOutputFile,
     ];
 
+    if (options?.jsonSchema) {
+      await fs.writeFile(
+        schemaFile,
+        JSON.stringify(options.jsonSchema),
+        'utf-8',
+      );
+      args.push('--output-schema', schemaFile);
+    }
+
     if (this.modelName) {
       args.push('-m', this.modelName);
     }
-    args.push(fullPrompt);
+    args.push('-');
 
     try {
       await execa('codex', args, {
-        input: '', // stdin 입력 대기 방지
+        cwd: tempDir,
+        input: fullPrompt,
         timeout: 600000, // 심층 리서치 및 장문 생성을 위한 10분 타임아웃
       });
 
       const result = await fs.readFile(tempOutputFile, 'utf-8');
-      await fs.unlink(tempOutputFile).catch(() => {});
       return result.trim();
     } catch (error: any) {
-      await fs.unlink(tempOutputFile).catch(() => {});
       throw new Error(
         `codex CLI 실행 중 오류가 발생했습니다: ${error.message || error}`,
       );
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
     }
   }
 }
