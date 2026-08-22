@@ -1,14 +1,16 @@
 {
-  "name": "tech-blog-engine",
+  "name": "deepdraft",
   "version": "0.1.0",
-  "description": "5년차 엔지니어를 위한 고품질 마크다운 기술 블로그 생성 엔진",
+  "description": "Generate polished technical articles in Markdown with local agents or LLM APIs",
   "type": "module",
   "bin": {
-    "tech-blog": "./dist/bin/index.js"
+    "deepdraft": "./dist/bin/index.js"
   },
   "scripts": {
     "dev": "tsx src/bin/index.ts",
-    "build": "tsc",
+    "clean": "node --input-type=module -e \"import fs from 'node:fs/promises'; await fs.rm('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc",
+    "prepack": "npm run build",
     "start": "node dist/bin/index.js",
     "test": "vitest run",
     "lint": "biome lint .",
@@ -18,6 +20,7 @@
     "check:fix": "biome check --write ."
   },
   "keywords": [
+    "deepdraft",
     "tech-blog",
     "ai",
     "markdown",
@@ -26,6 +29,14 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "soul.md"
+  ],
   "dependencies": {
     "@ai-sdk/anthropic": "^1.1.10",
     "@ai-sdk/google": "^1.1.17",

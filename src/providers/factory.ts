@@ -5,65 +5,73 @@ import { CodexProvider } from './codex.provider.js';
 import type { LLMProvider } from './types.js';
 
 export interface ProviderSelectionOptions {
-  provider?: string;
+  provider: string;
   model?: string;
 }
 
-async function isCommandAvailable(command: string): Promise<boolean> {
+export const SUPPORTED_PROVIDERS = [
+  'codex',
+  'agy',
+  'openai',
+  'gemini',
+  'claude',
+] as const;
+
+export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
+
+export async function isCommandAvailable(command: string): Promise<boolean> {
   try {
-    await execa('which', [command]);
+    const locator = process.platform === 'win32' ? 'where' : 'which';
+    await execa(locator, [command]);
     return true;
   } catch {
     return false;
   }
 }
 
-export async function resolveProvider(
-  options: ProviderSelectionOptions = {},
+function requireEnvironment(name: string, alternatives: string[] = []): void {
+  const names = [name, ...alternatives];
+  if (!names.some((key) => process.env[key])) {
+    throw new Error(
+      `${name} 환경변수가 필요합니다.${
+        alternatives.length > 0
+          ? ` (대체 지원: ${alternatives.join(', ')})`
+          : ''
+      }`,
+    );
+  }
+}
+
+export async function createProvider(
+  options: ProviderSelectionOptions,
 ): Promise<LLMProvider> {
   const { provider, model } = options;
+  const normalized = provider.toLowerCase();
 
-  // 1. 사용자가 명시적으로 provider를 지정한 경우
-  if (provider) {
-    const normalized = provider.toLowerCase();
-    if (['gemini', 'openai', 'claude'].includes(normalized)) {
-      return new ApiProvider(normalized as ApiProviderType, model);
-    }
-    if (normalized === 'agy') {
-      return new AgyProvider(model);
-    }
-    if (normalized === 'codex') {
-      return new CodexProvider(model);
-    }
+  if (!SUPPORTED_PROVIDERS.includes(normalized as SupportedProvider)) {
     throw new Error(
-      `알 수 없는 프로바이더입니다: ${provider}. (지원 목록: gemini, openai, claude, agy, codex)`,
+      `알 수 없는 Provider입니다: ${provider}. (지원 목록: ${SUPPORTED_PROVIDERS.join(', ')})`,
     );
   }
 
-  // 2. 환경변수에 API Key가 있는지 확인
-  if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return new ApiProvider('gemini', model);
-  }
-  if (process.env.OPENAI_API_KEY) {
-    return new ApiProvider('openai', model);
-  }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return new ApiProvider('claude', model);
-  }
-
-  // 3. 로컬 에이전트 CLI(agy, codex)가 설치되어 있는지 자동 감지
-  if (await isCommandAvailable('agy')) {
-    return new AgyProvider(model);
-  }
-  if (await isCommandAvailable('codex')) {
-    return new CodexProvider(model);
+  if (normalized === 'codex' || normalized === 'agy') {
+    if (!(await isCommandAvailable(normalized))) {
+      throw new Error(
+        `${normalized} CLI를 찾을 수 없습니다. 설치 상태를 확인해 주세요.`,
+      );
+    }
+    return normalized === 'codex'
+      ? new CodexProvider(model)
+      : new AgyProvider(model);
   }
 
-  throw new Error(
-    '사용 가능한 LLM Provider를 찾을 수 없습니다.\n' +
-      '다음 중 하나를 설정해 주세요:\n' +
-      '  - API Key 환경변수 설정 (GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY)\n' +
-      '  - 로컬 코딩 에이전트 CLI 설치 (agy, codex)\n' +
-      '  - --provider 플래그 지정 (예: --provider agy)',
-  );
+  if (normalized === 'openai') {
+    requireEnvironment('OPENAI_API_KEY');
+  } else if (normalized === 'gemini') {
+    requireEnvironment('GEMINI_API_KEY', ['GOOGLE_GENERATIVE_AI_API_KEY']);
+  } else {
+    requireEnvironment('ANTHROPIC_API_KEY');
+  }
+
+  return new ApiProvider(normalized as ApiProviderType, model);
 }

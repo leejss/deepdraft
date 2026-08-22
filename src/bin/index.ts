@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
-import { handleGenerate } from '../commands/generate.js';
+import { handleWrite } from '../commands/write.js';
+import { SUPPORTED_LANGUAGES } from '../core/language.js';
+import { SUPPORTED_PROVIDERS } from '../providers/factory.js';
+import { logger } from '../utils/logger.js';
 
 // .env 파일 로드
 dotenv.config();
@@ -9,32 +12,44 @@ dotenv.config();
 const program = new Command();
 
 program
-  .name('tech-blog')
-  .description('5년차 엔지니어를 위한 고품질 마크다운 기술 블로그 생성 엔진')
+  .name('deepdraft')
+  .description(
+    'Generate polished technical articles with local agents or LLM APIs',
+  )
   .version('0.1.0');
 
 program
-  .command('generate')
-  .alias('gen')
-  .description('주제 또는 파일로부터 기술 블로그 마크다운 글을 생성합니다.')
-  .argument('[topic]', '작성할 기술 블로그 주제')
-  .option('-f, --file <path>', '참고할 텍스트/마크다운 파일 경로')
+  .command('write')
+  .description('Write a technical article from a topic or input file')
+  .argument('[topic]', 'technical article topic')
+  .option('-f, --file <path>', 'text or Markdown input file')
   .option(
     '-o, --output <path>',
-    '결과 마크다운 파일 저장 경로 (기본값: ./posts/[date]-[slug].md)',
+    'output Markdown path (default: ./posts/[date]-[slug].md)',
   )
-  .option(
+  .requiredOption(
     '-p, --provider <name>',
-    'LLM Provider (gemini, openai, claude, agy, codex)',
+    `provider to use (${SUPPORTED_PROVIDERS.join(', ')})`,
   )
-  .option('-m, --model <name>', '특정 모델 이름 지정')
+  .addOption(
+    new Option('-l, --language <code>', 'output language')
+      .choices([...SUPPORTED_LANGUAGES])
+      .makeOptionMandatory(),
+  )
+  .option('-m, --model <name>', 'model to use with the selected provider')
   .option(
     '-s, --style <type>',
-    '글 스타일 (deep-dive, troubleshooting, architecture-compare)',
+    'writing style hint (deep-dive, troubleshooting, architecture-compare)',
     'deep-dive',
   )
+  .option('--force', 'overwrite an existing output file', false)
   .action(async (topic, options) => {
-    await handleGenerate(topic, options);
+    await handleWrite(topic, options);
   });
 
-program.parse(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error: any) {
+  logger.error(error.message || String(error));
+  process.exitCode = 1;
+}
