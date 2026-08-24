@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { generateWithProvider } from '../providers/generate.js';
 import type { GenerateOptions, LLMProvider } from '../providers/types.js';
 
 function extractJson(response: string): unknown {
@@ -19,6 +20,7 @@ export async function generateStructured<T>(options: {
   provider: LLMProvider;
   prompt: string;
   generateOptions: GenerateOptions;
+  promptContext?: string;
   schema: z.ZodType<T>;
   fallback: T;
   attempts?: number;
@@ -27,6 +29,7 @@ export async function generateStructured<T>(options: {
     provider,
     prompt,
     generateOptions,
+    promptContext,
     schema,
     fallback,
     attempts = 2,
@@ -37,10 +40,15 @@ export async function generateStructured<T>(options: {
       attempt === 1
         ? ''
         : '\n\n이전 응답의 JSON 구조가 요구사항과 일치하지 않았습니다. 설명 없이 유효한 JSON만 다시 출력하세요.';
-    const response = await provider.generate(`${prompt}${retryInstruction}`, {
-      ...generateOptions,
-      temperature: attempt === 1 ? generateOptions.temperature : 0.1,
-    });
+    const response = await generateWithProvider(
+      provider,
+      `${prompt}${retryInstruction}`,
+      {
+        ...generateOptions,
+        temperature: attempt === 1 ? generateOptions.temperature : 0.1,
+      },
+      promptContext,
+    );
 
     try {
       const result = schema.safeParse(extractJson(response));

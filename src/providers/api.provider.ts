@@ -2,11 +2,12 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
 import { generateText, type LanguageModel } from 'ai';
-import type { GenerateOptions, LLMProvider } from './types.js';
+import type { ApiGenerateOptions, ApiLLMProvider } from './types.js';
 
 export type ApiProviderType = 'gemini' | 'openai' | 'claude';
 
-export class ApiProvider implements LLMProvider {
+export class ApiProvider implements ApiLLMProvider {
+  public readonly kind = 'api' as const;
   public readonly id: string;
   public readonly name: string;
   private readonly modelInstance: LanguageModel;
@@ -31,7 +32,10 @@ export class ApiProvider implements LLMProvider {
     }
   }
 
-  async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+  async generate(
+    prompt: string,
+    options?: ApiGenerateOptions,
+  ): Promise<string> {
     const result = await generateText({
       model: this.modelInstance,
       system: options?.systemPrompt,

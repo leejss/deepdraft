@@ -1,5 +1,6 @@
+import { generateWithProvider } from '../../providers/generate.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { createSystemPrompt, type StageOptions } from '../language.js';
+import { createPromptContext, type StageOptions } from '../language.js';
 
 export async function lintAndPolish(
   draft: string,
@@ -40,11 +41,15 @@ ${draft}
 Silently perform every check above. Return only the revised Markdown article body, beginning with its level-one title. Do not include an audit report, frontmatter, preface, or explanation of your edits.
 `;
 
-  const response = await provider.generate(prompt, {
-    systemPrompt: createSystemPrompt(options.language),
-    temperature: 0.2,
-    maxTokens: 8000,
-  });
+  const response = await generateWithProvider(
+    provider,
+    prompt,
+    {
+      temperature: 0.2,
+      maxTokens: 8000,
+    },
+    createPromptContext(options.language),
+  );
 
   return response.trim();
 }

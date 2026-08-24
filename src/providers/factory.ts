@@ -29,16 +29,9 @@ export async function isCommandAvailable(command: string): Promise<boolean> {
   }
 }
 
-function requireEnvironment(name: string, alternatives: string[] = []): void {
-  const names = [name, ...alternatives];
-  if (!names.some((key) => process.env[key])) {
-    throw new Error(
-      `${name} 환경변수가 필요합니다.${
-        alternatives.length > 0
-          ? ` (대체 지원: ${alternatives.join(', ')})`
-          : ''
-      }`,
-    );
+function requireEnvironment(name: string): void {
+  if (!process.env[name]) {
+    throw new Error(`${name} environment variable is required.`);
   }
 }
 
@@ -46,20 +39,20 @@ export async function createProvider(
   options: ProviderSelectionOptions,
 ): Promise<LLMProvider> {
   const { provider, model } = options;
-  const normalized = provider.toLowerCase();
-
-  if (!SUPPORTED_PROVIDERS.includes(normalized as SupportedProvider)) {
+  const normalized = provider.toLowerCase() as SupportedProvider;
+  if (!SUPPORTED_PROVIDERS.includes(normalized)) {
     throw new Error(
-      `알 수 없는 Provider입니다: ${provider}. (지원 목록: ${SUPPORTED_PROVIDERS.join(', ')})`,
+      `Unknown provider: ${provider}. Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}.`,
     );
   }
 
   if (normalized === 'codex' || normalized === 'agy') {
     if (!(await isCommandAvailable(normalized))) {
       throw new Error(
-        `${normalized} CLI를 찾을 수 없습니다. 설치 상태를 확인해 주세요.`,
+        `${normalized} CLI was not found. Please verify that it is installed and available on your PATH.`,
       );
     }
+
     return normalized === 'codex'
       ? new CodexProvider(model)
       : new AgyProvider(model);
@@ -68,7 +61,7 @@ export async function createProvider(
   if (normalized === 'openai') {
     requireEnvironment('OPENAI_API_KEY');
   } else if (normalized === 'gemini') {
-    requireEnvironment('GEMINI_API_KEY', ['GOOGLE_GENERATIVE_AI_API_KEY']);
+    requireEnvironment('GEMINI_API_KEY');
   } else {
     requireEnvironment('ANTHROPIC_API_KEY');
   }

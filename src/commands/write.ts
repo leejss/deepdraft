@@ -1,7 +1,6 @@
 import { parseOutputLanguage } from '../core/language.js';
 import { runPipeline } from '../core/pipeline.js';
 import { createProvider } from '../providers/factory.js';
-import type { LLMProvider } from '../providers/types.js';
 import { readInputFile, saveMarkdownFile } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 
@@ -26,14 +25,14 @@ export async function handleWrite(
     if (options.file) {
       const fileContent = await readInputFile(options.file);
       rawInput = rawInput
-        ? `${rawInput}\n\n[참고 메모/자료]\n${fileContent}`
+        ? `${rawInput}\n\n[Reference notes]\n${fileContent}`
         : fileContent;
     }
 
     if (!rawInput) {
       throw new Error(
-        '작성할 주제를 입력하거나 --file 옵션으로 입력 파일을 지정해 주세요.\n' +
-          '예시: deepdraft write "PostgreSQL MVCC 동작 원리" --provider codex --language ko',
+        'Provide a topic or specify an input file with the --file option.\n' +
+          'Example: deepdraft write "How PostgreSQL MVCC Works" --provider codex --language en',
       );
     }
 
@@ -42,25 +41,16 @@ export async function handleWrite(
       model: options.model,
     });
 
-    logger.info(`사용 중인 Provider: ${provider.name}`);
-    let providerCallCount = 0;
-    const trackedProvider: LLMProvider = {
-      id: provider.id,
-      name: provider.name,
-      generate: async (prompt, generateOptions) => {
-        providerCallCount += 1;
-        return provider.generate(prompt, generateOptions);
-      },
-    };
+    logger.info(`Using provider: ${provider.name}`);
 
     const result = await runPipeline({
       input: rawInput,
-      provider: trackedProvider,
+      provider,
       style: options.style,
       language: parseOutputLanguage(options.language),
       onProgress: (step, title, detail) => {
         if (currentStep > 0 && currentStep < step) {
-          logger.succeedStep(`Step ${currentStep} 완료`);
+          logger.succeedStep(`Step ${currentStep} complete`);
         }
         currentStep = step;
         logger.startStep(step, 5, title);
@@ -70,7 +60,7 @@ export async function handleWrite(
       },
     });
 
-    logger.succeedStep('Step 5 완료 (마크다운 조립 완료)');
+    logger.succeedStep('Step 5 complete (Markdown assembled)');
 
     const savedPath = await saveMarkdownFile(result.markdown, {
       outputPath: options.output,
@@ -78,19 +68,18 @@ export async function handleWrite(
       force: options.force,
     });
 
-    logger.box('기술 블로그 글 생성 완료!', {
-      '제목 (Title)': result.frontmatter.title,
-      카테고리: result.frontmatter.category,
-      '태그 (Tags)': result.frontmatter.tags.join(', '),
-      '예상 읽기시간': result.frontmatter.readingTime,
-      'Provider 호출': `${providerCallCount}회`,
-      '저장 경로': savedPath,
+    logger.box('Your technical article is ready!', {
+      Title: result.frontmatter.title,
+      Category: result.frontmatter.category,
+      Tags: result.frontmatter.tags.join(', '),
+      'Estimated reading time': result.frontmatter.readingTime,
+      'Output path': savedPath,
     });
 
-    logger.success(`성공적으로 생성되었습니다: ${savedPath}`);
+    logger.success(`Article saved successfully: ${savedPath}`);
   } catch (error: any) {
     if (currentStep > 0) {
-      logger.failStep('생성 실패');
+      logger.failStep('Article generation failed');
     }
     throw error;
   }

@@ -2,21 +2,18 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execa } from 'execa';
-import type { GenerateOptions, LLMProvider } from './types.js';
+import type { GenerateOptions, LocalAgentLLMProvider } from './types.js';
 
-export class AgyProvider implements LLMProvider {
+export class AgyProvider implements LocalAgentLLMProvider {
+  public readonly kind = 'local-agent' as const;
   public readonly id = 'agy';
   public readonly name = 'Antigravity CLI (Local Agent)';
 
   constructor(private readonly modelName?: string) {}
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
-    const fullPrompt = options?.systemPrompt
-      ? `System Instructions:\n${options.systemPrompt}\n\nUser Request:\n${prompt}`
-      : prompt;
-
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'deepdraft-agy-'));
-    const args = ['-p', fullPrompt, '--sandbox', '--disable-slash-commands'];
+    const args = ['-p', prompt, '--sandbox', '--disable-slash-commands'];
     if (options?.jsonSchema) {
       args.push(
         '--output-format',

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { LLMProvider } from '../../providers/types.js';
 import { formatLocalDate } from '../../utils/date.js';
 import { generateStructured } from '../../utils/structured.js';
-import { createSystemPrompt, type StageOptions } from '../language.js';
+import { createPromptContext, type StageOptions } from '../language.js';
 import type { AngleResult } from './angle.js';
 
 export interface FrontmatterData {
@@ -88,8 +88,8 @@ ${polishedBody.slice(0, 1000)}
   const metadata = await generateStructured({
     provider,
     prompt,
+    promptContext: createPromptContext(options.language),
     generateOptions: {
-      systemPrompt: createSystemPrompt(options.language),
       temperature: 0.3,
       jsonSchema: metadataJsonSchema,
     },

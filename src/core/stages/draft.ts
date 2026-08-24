@@ -1,5 +1,6 @@
+import { generateWithProvider } from '../../providers/generate.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { createSystemPrompt, type StageOptions } from '../language.js';
+import { createPromptContext, type StageOptions } from '../language.js';
 import type { AngleResult } from './angle.js';
 import type { OutlineResult } from './outline.js';
 
@@ -38,11 +39,15 @@ ${s.hasCode ? `- [Code]: ${s.codeDescription}` : ''}
 Return only the Markdown article body, beginning with the level-one title. Do not include frontmatter.
 `;
 
-  const response = await provider.generate(prompt, {
-    systemPrompt: createSystemPrompt(options.language),
-    temperature: 0.7,
-    maxTokens: 8000,
-  });
+  const response = await generateWithProvider(
+    provider,
+    prompt,
+    {
+      temperature: 0.7,
+      maxTokens: 8000,
+    },
+    createPromptContext(options.language),
+  );
 
   return response.trim();
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { LLMProvider } from '../../providers/types.js';
 import { generateStructured } from '../../utils/structured.js';
-import { createSystemPrompt, type StageOptions } from '../language.js';
+import { createPromptContext, type StageOptions } from '../language.js';
 
 export interface AngleResult {
   title: string;
@@ -92,8 +92,8 @@ Respond with JSON matching this shape:
   return generateStructured({
     provider,
     prompt,
+    promptContext: createPromptContext(options.language),
     generateOptions: {
-      systemPrompt: createSystemPrompt(options.language),
       temperature: 0.6,
       jsonSchema: angleJsonSchema,
     },

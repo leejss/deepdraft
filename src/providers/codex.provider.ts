@@ -2,19 +2,16 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execa } from 'execa';
-import type { GenerateOptions, LLMProvider } from './types.js';
+import type { GenerateOptions, LocalAgentLLMProvider } from './types.js';
 
-export class CodexProvider implements LLMProvider {
+export class CodexProvider implements LocalAgentLLMProvider {
+  public readonly kind = 'local-agent' as const;
   public readonly id = 'codex';
   public readonly name = 'Codex CLI (Local Agent)';
 
   constructor(private readonly modelName?: string) {}
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
-    const fullPrompt = options?.systemPrompt
-      ? `Instructions:\n${options.systemPrompt}\n\nTask:\n${prompt}\n\nReturn the requested result directly after performing only the validation necessary for the task.`
-      : prompt;
-
     const tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), 'deepdraft-codex-'),
     );
@@ -53,7 +50,7 @@ export class CodexProvider implements LLMProvider {
     try {
       await execa('codex', args, {
         cwd: tempDir,
-        input: fullPrompt,
+        input: prompt,
         timeout: 600000, // 심층 리서치 및 장문 생성을 위한 10분 타임아웃
       });
 

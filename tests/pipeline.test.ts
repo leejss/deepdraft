@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execa } from 'execa';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createSystemPrompt,
+  createPromptContext,
   parseOutputLanguage,
 } from '../src/core/language.js';
 import { runPipeline } from '../src/core/pipeline.js';
@@ -13,7 +13,12 @@ import { generateOutline } from '../src/core/stages/outline.js';
 import { AgyProvider } from '../src/providers/agy.provider.js';
 import { CodexProvider } from '../src/providers/codex.provider.js';
 import { createProvider } from '../src/providers/factory.js';
-import type { GenerateOptions, LLMProvider } from '../src/providers/types.js';
+import { generateWithProvider } from '../src/providers/generate.js';
+import type {
+  ApiLLMProvider,
+  GenerateOptions,
+  LocalAgentLLMProvider,
+} from '../src/providers/types.js';
 import { formatLocalDate } from '../src/utils/date.js';
 import { saveMarkdownFile, slugify } from '../src/utils/file.js';
 
@@ -36,7 +41,8 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-class MockProvider implements LLMProvider {
+class MockProvider implements LocalAgentLLMProvider {
+  public readonly kind = 'local-agent' as const;
   public readonly id = 'mock';
   public readonly name = 'Mock Provider';
 
@@ -175,7 +181,7 @@ describe('DeepDraft Core Tests', () => {
     expect(codex.id).toBe('codex');
 
     await expect(createProvider({ provider: 'unknown' })).rejects.toThrow(
-      '알 수 없는 Provider',
+      'Unknown provider',
     );
   });
 
@@ -191,17 +197,18 @@ describe('DeepDraft Core Tests', () => {
     expect(parseOutputLanguage('en')).toBe('en');
     expect(() => parseOutputLanguage('auto')).toThrow('Unsupported language');
     expect(() => parseOutputLanguage('ja')).toThrow('Unsupported language');
-    expect(createSystemPrompt('en')).toContain(
+    expect(createPromptContext('en')).toContain(
       'Write all reader-facing prose in English',
     );
-    expect(createSystemPrompt('ko')).toContain(
+    expect(createPromptContext('ko')).toContain(
       'Write all reader-facing prose in Korean',
     );
   });
 
   it('lint should enforce evidence and instruction-leakage guardrails in one call', async () => {
     const generate = vi.fn().mockResolvedValue('# 검토된 글');
-    const provider: LLMProvider = {
+    const provider: LocalAgentLLMProvider = {
+      kind: 'local-agent',
       id: 'lint-test',
       name: 'Lint Test Provider',
       generate,
@@ -223,9 +230,7 @@ describe('DeepDraft Core Tests', () => {
     expect(prompt).toContain('system instructions');
     expect(prompt).toContain('Do not append a generic "Next Steps"');
     expect(options).toMatchObject({ temperature: 0.2, maxTokens: 8000 });
-    expect(options.systemPrompt).toContain(
-      'Write all reader-facing prose in Korean',
-    );
+    expect(prompt).toContain('Write all reader-facing prose in Korean');
   });
 
   it('local providers should run in isolated sandboxes without bypass flags', async () => {
@@ -258,6 +263,44 @@ describe('DeepDraft Core Tests', () => {
     );
     expect(agyCall?.[2]?.cwd).toContain('deepdraft-agy-');
     expect(codexCall?.[2]?.cwd).toContain('deepdraft-codex-');
+  });
+
+  it('should route prompt context by provider kind', async () => {
+    const localGenerate = vi.fn().mockResolvedValue('local result');
+    const apiGenerate = vi.fn().mockResolvedValue('api result');
+    const localProvider: LocalAgentLLMProvider = {
+      kind: 'local-agent',
+      id: 'local',
+      name: 'Local Provider',
+      generate: localGenerate,
+    };
+    const apiProvider: ApiLLMProvider = {
+      kind: 'api',
+      id: 'api',
+      name: 'API Provider',
+      generate: apiGenerate,
+    };
+
+    await generateWithProvider(
+      localProvider,
+      'Task',
+      { temperature: 0.2 },
+      'Prompt context',
+    );
+    await generateWithProvider(
+      apiProvider,
+      'Task',
+      { temperature: 0.2 },
+      'Prompt context',
+    );
+
+    expect(localGenerate).toHaveBeenCalledWith('Prompt context\n\nTask', {
+      temperature: 0.2,
+    });
+    expect(apiGenerate).toHaveBeenCalledWith('Task', {
+      temperature: 0.2,
+      systemPrompt: 'Prompt context',
+    });
   });
 
   it('agy should enable JSON output and unwrap structured responses', async () => {
@@ -310,7 +353,8 @@ describe('DeepDraft Core Tests', () => {
 
   it('generateOutline should retry invalid structured output and use a safe fallback', async () => {
     const generate = vi.fn().mockResolvedValue('{"sections":[null]}');
-    const provider: LLMProvider = {
+    const provider: LocalAgentLLMProvider = {
+      kind: 'local-agent',
       id: 'invalid-mock',
       name: 'Invalid Mock',
       generate,

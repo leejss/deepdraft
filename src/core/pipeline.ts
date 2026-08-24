@@ -27,43 +27,43 @@ export async function runPipeline(
   const { input, provider, style, language, onProgress } = options;
   const stageOptions: StageOptions = { language };
 
-  // Step 1: 의도 분석 및 동적 서사 장르 결정
+  // Step 1: Analyze the topic and define the article direction
   onProgress?.(
     1,
-    '장르 및 서사 전략 도출 중...',
-    '주제에 최적화된 글의 장르(Archetype)와 스토리라인 분석',
+    'Analyzing the topic and defining direction...',
+    'Identifying the strongest narrative angle and story arc for this topic',
   );
   const angle = await extractAngle(input, provider, stageOptions, style);
 
-  // Step 2: 맞춤형 목차 및 청사진 동적 설계
+  // Step 2: Design a tailored outline and article blueprint
   onProgress?.(
     2,
-    `청사진 설계 중... [장르: ${angle.narrativeArchetype}]`,
-    `"${angle.title}" - 최적화된 섹션 구조 및 핵심 요소 배치 계획`,
+    `Building the article blueprint... [Archetype: ${angle.narrativeArchetype}]`,
+    `"${angle.title}" — planning the section structure and key takeaways`,
   );
   const outline = await generateOutline(angle, provider, stageOptions);
 
-  // Step 3: 섹션별 심층 본문 작성
+  // Step 3: Draft the article section by section
   onProgress?.(
     3,
-    '섹션별 심층 본문 작성 중...',
-    `총 ${outline.sections.length}개 맞춤형 섹션, 다이어그램 및 실무 코드 작성`,
+    'Drafting article sections...',
+    `Writing ${outline.sections.length} tailored sections with diagrams and practical code`,
   );
   const draft = await draftContent(angle, outline, provider, stageOptions);
 
-  // Step 4: 기술적 근거, 가독성 및 완성도 퇴고
+  // Step 4: Review technical accuracy, clarity, and completeness
   onProgress?.(
     4,
-    '기술적 근거 및 완성도 검토 중...',
-    '근거 없는 수치와 과도한 단정을 점검하고 블로그 톤 교정',
+    'Reviewing technical accuracy and clarity...',
+    'Checking unsupported claims, improving readability, and refining the article voice',
   );
   const polished = await lintAndPolish(draft, provider, stageOptions);
 
-  // Step 5: 표준 마크다운 및 Frontmatter 조립
+  // Step 5: Assemble the final Markdown and frontmatter
   onProgress?.(
     5,
-    '표준 마크다운 및 메타데이터 조립 중...',
-    'YAML Frontmatter 생성 및 최종 파일 완성',
+    'Assembling Markdown and metadata...',
+    'Generating YAML frontmatter and preparing the final article',
   );
   const assembly = await assembleMarkdown(
     angle,

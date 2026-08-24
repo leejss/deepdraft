@@ -1,4 +1,4 @@
-import { SOUL_SYSTEM_PROMPT } from './soul-prompt.js';
+import { SOUL_PROMPT_CONTEXT } from './soul-prompt.js';
 
 export const SUPPORTED_LANGUAGES = ['ko', 'en'] as const;
 
@@ -18,7 +18,7 @@ export function parseOutputLanguage(value: string): OutputLanguage {
   );
 }
 
-export function createSystemPrompt(language: OutputLanguage): string {
+export function createPromptContext(language: OutputLanguage): string {
   const languageName = language === 'ko' ? 'Korean' : 'English';
   const languageInstruction = [
     'Output language policy:',
@@ -28,5 +28,5 @@ export function createSystemPrompt(language: OutputLanguage): string {
     '- Keep the selected output language unchanged throughout planning, drafting, revision, and metadata generation.',
   ].join('\n');
 
-  return `${SOUL_SYSTEM_PROMPT.trim()}\n\n${languageInstruction}`;
+  return `${SOUL_PROMPT_CONTEXT.trim()}\n\n${languageInstruction}`;
 }
