@@ -43,10 +43,9 @@ ANTHROPIC_API_KEY=... deepdraft write "Distributed transaction trade-offs" --pro
 
 # Notes as the primary input
 deepdraft write --file ./notes/incident.md --provider codex --language en
-
-# A topic with supporting notes
-deepdraft write "Incident retrospective" --file ./notes/incident.md --provider agy --language en
 ```
+
+`topic`과 `--file`은 동시에 지정할 수 없습니다. 둘 중 하나만 입력으로 사용해야 합니다.
 
 ## CLI options
 

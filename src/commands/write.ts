@@ -5,7 +5,6 @@ import { readInputFile, saveMarkdownFile } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 
 export interface WriteCommandOptions {
-  file?: string;
   output?: string;
   provider: string;
   model?: string;
@@ -14,26 +13,51 @@ export interface WriteCommandOptions {
   force?: boolean;
 }
 
-export async function handleWrite(
+export type WriteInput =
+  | {
+      kind: 'topic';
+      value: string;
+    }
+  | {
+      kind: 'file';
+      path: string;
+    };
+
+export function resolveWriteInput(
   topicArg: string | undefined,
+  filePath: string | undefined,
+): WriteInput {
+  const topic = topicArg?.trim();
+  const file = filePath?.trim();
+
+  if (topic && file) {
+    throw new Error('topic과 --file은 동시에 사용할 수 없습니다.');
+  }
+
+  if (topic) {
+    return { kind: 'topic', value: topic };
+  }
+
+  if (file) {
+    return { kind: 'file', path: file };
+  }
+
+  throw new Error(
+    'Provide a topic or specify an input file with the --file option.\n' +
+      'Example: deepdraft write "How PostgreSQL MVCC Works" --provider codex --language en',
+  );
+}
+
+export async function handleWrite(
+  input: WriteInput,
   options: WriteCommandOptions,
 ): Promise<void> {
-  let currentStep = 0;
-
   try {
-    let rawInput = topicArg?.trim();
-    if (options.file) {
-      const fileContent = await readInputFile(options.file);
-      rawInput = rawInput
-        ? `${rawInput}\n\n[Reference notes]\n${fileContent}`
-        : fileContent;
-    }
+    const rawInput =
+      input.kind === 'topic' ? input.value : await readInputFile(input.path);
 
     if (!rawInput) {
-      throw new Error(
-        'Provide a topic or specify an input file with the --file option.\n' +
-          'Example: deepdraft write "How PostgreSQL MVCC Works" --provider codex --language en',
-      );
+      throw new Error('The input file is empty.');
     }
 
     const provider = await createProvider({
@@ -49,10 +73,6 @@ export async function handleWrite(
       style: options.style,
       language: parseOutputLanguage(options.language),
       onProgress: (step, title, detail) => {
-        if (currentStep > 0 && currentStep < step) {
-          logger.succeedStep(`Step ${currentStep} complete`);
-        }
-        currentStep = step;
         logger.startStep(step, 5, title);
         if (detail) {
           logger.updateDetail(detail);
@@ -78,9 +98,7 @@ export async function handleWrite(
 
     logger.success(`Article saved successfully: ${savedPath}`);
   } catch (error: any) {
-    if (currentStep > 0) {
-      logger.failStep('Article generation failed');
-    }
+    logger.failStep('Article generation failed');
     throw error;
   }
 }

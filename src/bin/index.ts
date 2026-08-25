@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
-import { handleWrite } from '../commands/write.js';
+import { handleWrite, resolveWriteInput } from '../commands/write.js';
 import { SUPPORTED_LANGUAGES } from '../core/language.js';
 import { SUPPORTED_PROVIDERS } from '../providers/factory.js';
 import { logger } from '../utils/logger.js';
 
-// .env 파일 로드
 dotenv.config();
-
 const program = new Command();
 
 program
@@ -44,7 +42,9 @@ program
   )
   .option('--force', 'overwrite an existing output file', false)
   .action(async (topic, options) => {
-    await handleWrite(topic, options);
+    const input = resolveWriteInput(topic, options.file);
+    const { file: _file, ...writeOptions } = options;
+    await handleWrite(input, writeOptions);
   });
 
 try {
