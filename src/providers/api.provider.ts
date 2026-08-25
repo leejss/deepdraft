@@ -2,9 +2,10 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
 import { generateText, type LanguageModel } from 'ai';
+import type { ApiProviderType } from './definitions.js';
 import type { ApiGenerateOptions, ApiLLMProvider } from './types.js';
 
-export type ApiProviderType = 'gemini' | 'openai' | 'claude';
+export type { ApiProviderType } from './definitions.js';
 
 export class ApiProvider implements ApiLLMProvider {
   public readonly kind = 'api' as const;

@@ -1,16 +1,26 @@
+import { keysOf } from '../utils/values.js';
 import { SOUL_PROMPT_CONTEXT } from './soul-prompt.js';
 
-export const SUPPORTED_LANGUAGES = ['ko', 'en'] as const;
+export const LANGUAGE_DEFINITIONS = {
+  ko: { name: 'Korean' },
+  en: { name: 'English' },
+} as const;
 
-export type OutputLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export type OutputLanguage = keyof typeof LANGUAGE_DEFINITIONS;
+
+export const SUPPORTED_LANGUAGES = keysOf(LANGUAGE_DEFINITIONS);
 
 export interface StageOptions {
   language: OutputLanguage;
 }
 
+function isOutputLanguage(value: string): value is OutputLanguage {
+  return Object.hasOwn(LANGUAGE_DEFINITIONS, value);
+}
+
 export function parseOutputLanguage(value: string): OutputLanguage {
-  if (SUPPORTED_LANGUAGES.includes(value as OutputLanguage)) {
-    return value as OutputLanguage;
+  if (isOutputLanguage(value)) {
+    return value;
   }
 
   throw new Error(
@@ -19,7 +29,7 @@ export function parseOutputLanguage(value: string): OutputLanguage {
 }
 
 export function createPromptContext(language: OutputLanguage): string {
-  const languageName = language === 'ko' ? 'Korean' : 'English';
+  const languageName = LANGUAGE_DEFINITIONS[language].name;
   const languageInstruction = [
     'Output language policy:',
     `- Write all reader-facing prose in ${languageName}.`,
