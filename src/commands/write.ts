@@ -6,7 +6,8 @@ import { logger } from '../utils/logger.js';
 
 export interface WriteCommandOptions {
   output?: string;
-  provider: string;
+  agent?: string;
+  provider?: string;
   model?: string;
   style?: string;
   language: string;
@@ -44,7 +45,7 @@ export function resolveWriteInput(
 
   throw new Error(
     'Provide a topic or specify an input file with the --file option.\n' +
-      'Example: deepdraft write "How PostgreSQL MVCC Works" --provider codex --language en',
+      'Example: deepdraft write "How PostgreSQL MVCC Works" --agent codex --language en',
   );
 }
 
@@ -61,11 +62,12 @@ export async function handleWrite(
     }
 
     const provider = await createProvider({
+      agent: options.agent,
       provider: options.provider,
       model: options.model,
     });
 
-    logger.info(`Using provider: ${provider.name}`);
+    logger.info(`Using backend: ${provider.name}`);
 
     const result = await runPipeline({
       input: rawInput,

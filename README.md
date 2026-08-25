@@ -6,8 +6,8 @@ The intended audience, editorial voice, and quality bar are defined in [`soul.md
 
 ## Features
 
-- **Explicit provider selection**: You decide which backend runs each job. DeepDraft never selects a provider or falls back to another one automatically.
-- **Local-agent support**: Codex CLI and Antigravity CLI run in isolated temporary workspaces with sandboxing enabled.
+- **Explicit backend selection**: Choose either a local agent with `--agent` or an API provider with `--provider`. The two options are mutually exclusive, and DeepDraft never falls back automatically.
+- **Local-agent support**: Codex, Antigravity, Claude, and OpenCode CLIs run in isolated temporary workspaces with restrictive permissions.
 - **Five-stage writing pipeline**: Direction, outline, draft, evidence-aware revision, and frontmatter assembly are handled as distinct stages.
 - **Evidence-aware revision without another model call**: The revision stage removes or qualifies unsupported measurements, arbitrary thresholds, version-dependent generalizations, and leaked agent instructions.
 - **Validated structured output**: Zod validation and a bounded retry protect the pipeline from malformed model responses.
@@ -29,12 +29,14 @@ npm link
 
 ## Usage
 
-You must explicitly select a provider and output language for every run. DeepDraft currently supports Korean (`ko`) and English (`en`).
+You must explicitly select exactly one local agent or API provider, plus an output language, for every run. DeepDraft currently supports Korean (`ko`) and English (`en`).
 
 ```bash
 # Local agents
-deepdraft write "How Go's garbage collector coordinates write barriers" --provider codex --language en
-deepdraft write "PostgreSQL 인덱스 핫스팟 완화" --provider agy --language ko
+deepdraft write "How Go's garbage collector coordinates write barriers" --agent codex --language en
+deepdraft write "PostgreSQL 인덱스 핫스팟 완화" --agent agy --language ko
+deepdraft write "Node.js 이벤트 루프" --agent claude --language ko
+deepdraft write "Rust ownership patterns" --agent opencode --language en
 
 # API providers
 OPENAI_API_KEY=... deepdraft write "Kafka consumer rebalancing" --provider openai --language en
@@ -42,10 +44,11 @@ GEMINI_API_KEY=... deepdraft write "Redis 장애 복구" --provider gemini --lan
 ANTHROPIC_API_KEY=... deepdraft write "Distributed transaction trade-offs" --provider claude --language en
 
 # Notes as the primary input
-deepdraft write --file ./notes/incident.md --provider codex --language en
+deepdraft write --file ./notes/incident.md --agent codex --language en
 ```
 
 `topic`과 `--file`은 동시에 지정할 수 없습니다. 둘 중 하나만 입력으로 사용해야 합니다.
+`--agent`와 `--provider`도 동시에 지정할 수 없으며, 둘 중 정확히 하나를 선택해야 합니다.
 
 ## CLI options
 
@@ -53,14 +56,15 @@ deepdraft write --file ./notes/incident.md --provider codex --language en
 | :--- | :--- | :--- |
 | `[topic]` | Technical article topic | - |
 | `-f, --file <path>` | Text or Markdown input file | - |
-| `-p, --provider <name>` | One of `codex`, `agy`, `openai`, `gemini`, or `claude` | Required |
+| `--agent <name>` | Local CLI agent: `codex`, `agy`, `claude`, or `opencode` | One of agent/provider |
+| `-p, --provider <name>` | API provider: `openai`, `gemini`, or `claude` | One of agent/provider |
 | `-l, --language <code>` | Output language: `ko` or `en` | Required |
-| `-m, --model <name>` | Model to use with the selected provider | Provider default |
+| `-m, --model <name>` | Model to use with the selected backend | Backend default |
 | `-s, --style <type>` | Optional writing-style hint | `deep-dive` |
 | `-o, --output <path>` | Output Markdown path | `./posts/[date]-[slug].md` |
 | `--force` | Overwrite an existing explicit output path | `false` |
 
-If the selected provider is unavailable or fails, DeepDraft exits with an error instead of silently switching to another provider.
+If the selected agent or provider is unavailable or fails, DeepDraft exits with an error instead of silently switching to another backend.
 
 ## Development and verification
 

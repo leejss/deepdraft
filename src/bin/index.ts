@@ -3,7 +3,7 @@ import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
 import { handleWrite, resolveWriteInput } from '../commands/write.js';
 import { SUPPORTED_LANGUAGES } from '../core/language.js';
-import { SUPPORTED_PROVIDERS } from '../providers/factory.js';
+import { SUPPORTED_AGENTS, SUPPORTED_PROVIDERS } from '../providers/factory.js';
 import { logger } from '../utils/logger.js';
 
 dotenv.config();
@@ -25,16 +25,28 @@ program
     '-o, --output <path>',
     'output Markdown path (default: ./posts/[date]-[slug].md)',
   )
-  .requiredOption(
-    '-p, --provider <name>',
-    `provider to use (${SUPPORTED_PROVIDERS.join(', ')})`,
+  .addOption(
+    new Option(
+      '--agent <name>',
+      `local agent to use (${SUPPORTED_AGENTS.join(', ')})`,
+    )
+      .choices([...SUPPORTED_AGENTS])
+      .conflicts('provider'),
+  )
+  .addOption(
+    new Option(
+      '-p, --provider <name>',
+      `API provider to use (${SUPPORTED_PROVIDERS.join(', ')})`,
+    )
+      .choices([...SUPPORTED_PROVIDERS])
+      .conflicts('agent'),
   )
   .addOption(
     new Option('-l, --language <code>', 'output language')
       .choices([...SUPPORTED_LANGUAGES])
       .makeOptionMandatory(),
   )
-  .option('-m, --model <name>', 'model to use with the selected provider')
+  .option('-m, --model <name>', 'model to use with the selected backend')
   .option(
     '-s, --style <type>',
     'writing style hint (deep-dive, troubleshooting, architecture-compare)',

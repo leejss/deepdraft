@@ -11,9 +11,11 @@ import { runPipeline } from '../src/core/pipeline.js';
 import { lintAndPolish } from '../src/core/stages/lint.js';
 import { generateOutline } from '../src/core/stages/outline.js';
 import { AgyProvider } from '../src/providers/agy.provider.js';
+import { ClaudeProvider } from '../src/providers/claude.provider.js';
 import { CodexProvider } from '../src/providers/codex.provider.js';
 import { createProvider } from '../src/providers/factory.js';
 import { generateWithProvider } from '../src/providers/generate.js';
+import { OpenCodeProvider } from '../src/providers/opencode.provider.js';
 import type {
   ApiLLMProvider,
   GenerateOptions,
@@ -173,16 +175,34 @@ describe('DeepDraft Core Tests', () => {
     );
   });
 
-  it('createProvider should use only the explicitly selected provider', async () => {
-    const agy = await createProvider({ provider: 'agy' });
+  it('createProvider should use only the explicitly selected local agent', async () => {
+    const agy = await createProvider({ agent: 'agy' });
     expect(agy.id).toBe('agy');
 
-    const codex = await createProvider({ provider: 'codex' });
+    const codex = await createProvider({ agent: 'codex' });
     expect(codex.id).toBe('codex');
 
+    const claude = await createProvider({ agent: 'claude' });
+    expect(claude.id).toBe('claude');
+
+    const opencode = await createProvider({ agent: 'opencode' });
+    expect(opencode.id).toBe('opencode');
+
+    await expect(createProvider({ agent: 'unknown' })).rejects.toThrow(
+      'Unknown agent',
+    );
     await expect(createProvider({ provider: 'unknown' })).rejects.toThrow(
       'Unknown provider',
     );
+  });
+
+  it('createProvider should require exactly one of agent and provider', async () => {
+    await expect(createProvider({})).rejects.toThrow(
+      '--agent 또는 --provider 중 하나',
+    );
+    await expect(
+      createProvider({ agent: 'codex', provider: 'openai' }),
+    ).rejects.toThrow('--agent와 --provider는 동시에');
   });
 
   it('createProvider should require the selected API provider key', async () => {
@@ -190,6 +210,15 @@ describe('DeepDraft Core Tests', () => {
     await expect(createProvider({ provider: 'openai' })).rejects.toThrow(
       'OPENAI_API_KEY',
     );
+  });
+
+  it('createProvider should keep API providers separate from local agents', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-api-key');
+
+    const provider = await createProvider({ provider: 'claude' });
+
+    expect(provider.kind).toBe('api');
+    expect(provider.id).toBe('claude');
   });
 
   it('language should accept only ko and en', () => {
@@ -243,26 +272,57 @@ describe('DeepDraft Core Tests', () => {
           await fs.writeFile(outputFile, 'codex result', 'utf-8');
         }
       }
-      return { stdout: 'agy result' } as Awaited<ReturnType<typeof execa>>;
+      if (command === 'opencode') {
+        return {
+          stdout: [
+            JSON.stringify({
+              type: 'text',
+              part: { messageID: 'message-1', text: 'opencode result' },
+            }),
+            JSON.stringify({ type: 'step_finish', part: {} }),
+          ].join('\n'),
+        } as Awaited<ReturnType<typeof execa>>;
+      }
+      return {
+        stdout: command === 'claude' ? 'claude result' : 'agy result',
+      } as Awaited<ReturnType<typeof execa>>;
     });
 
     const agyResult = await new AgyProvider().generate('테스트');
     const codexResult = await new CodexProvider().generate('테스트');
+    const claudeResult = await new ClaudeProvider().generate('테스트');
+    const opencodeResult = await new OpenCodeProvider().generate('테스트');
     const agyCall = execaMock.mock.calls.find(([command]) => command === 'agy');
     const codexCall = execaMock.mock.calls.find(
       ([command]) => command === 'codex',
     );
+    const claudeCall = execaMock.mock.calls.find(
+      ([command]) => command === 'claude',
+    );
+    const opencodeCall = execaMock.mock.calls.find(
+      ([command]) => command === 'opencode',
+    );
 
     expect(agyResult).toBe('agy result');
     expect(codexResult).toBe('codex result');
+    expect(claudeResult).toBe('claude result');
+    expect(opencodeResult).toBe('opencode result');
     expect(agyCall?.[1]).toContain('--sandbox');
     expect(agyCall?.[1]).not.toContain('--dangerously-skip-permissions');
     expect(codexCall?.[1]).toContain('read-only');
     expect(codexCall?.[1]).not.toContain(
       '--dangerously-bypass-approvals-and-sandbox',
     );
+    expect(claudeCall?.[1]).toContain('--safe-mode');
+    expect(claudeCall?.[1]).toContain('plan');
+    expect(claudeCall?.[1]).not.toContain('--dangerously-skip-permissions');
+    expect(opencodeCall?.[1]).toContain('--agent');
+    expect(opencodeCall?.[1]).toContain('plan');
+    expect(opencodeCall?.[1]).not.toContain('--auto');
     expect(agyCall?.[2]?.cwd).toContain('deepdraft-agy-');
     expect(codexCall?.[2]?.cwd).toContain('deepdraft-codex-');
+    expect(claudeCall?.[2]?.cwd).toContain('deepdraft-claude-');
+    expect(opencodeCall?.[2]?.cwd).toContain('deepdraft-opencode-');
   });
 
   it('should route prompt context by provider kind', async () => {
@@ -325,6 +385,53 @@ describe('DeepDraft Core Tests', () => {
     expect(agyCall?.[1]).toContain('--output-format');
     expect(agyCall?.[1]).toContain('json');
     expect(agyCall?.[1]).toContain('--json-schema');
+  });
+
+  it('claude should enable JSON schema output and unwrap structured responses', async () => {
+    const execaMock = vi.mocked(execa);
+    execaMock.mockResolvedValue({
+      stdout: JSON.stringify({ structured_output: { ok: true } }),
+    } as Awaited<ReturnType<typeof execa>>);
+
+    const result = await new ClaudeProvider().generate('테스트', {
+      jsonSchema: {
+        type: 'object',
+        required: ['ok'],
+        properties: { ok: { type: 'boolean' } },
+      },
+    });
+    const claudeCall = execaMock.mock.calls.find(
+      ([command]) => command === 'claude',
+    );
+
+    expect(result).toBe('{"ok":true}');
+    expect(claudeCall?.[1]).toContain('--output-format');
+    expect(claudeCall?.[1]).toContain('json');
+    expect(claudeCall?.[1]).toContain('--json-schema');
+  });
+
+  it('opencode should return text from the final assistant message', async () => {
+    const execaMock = vi.mocked(execa);
+    execaMock.mockResolvedValue({
+      stdout: [
+        JSON.stringify({
+          type: 'text',
+          part: { messageID: 'message-1', text: 'intermediate' },
+        }),
+        JSON.stringify({
+          type: 'text',
+          part: { messageID: 'message-2', text: '{"ok":' },
+        }),
+        JSON.stringify({
+          type: 'text',
+          part: { messageID: 'message-2', text: 'true}' },
+        }),
+      ].join('\n'),
+    } as Awaited<ReturnType<typeof execa>>);
+
+    const result = await new OpenCodeProvider().generate('테스트');
+
+    expect(result).toBe('{"ok":true}');
   });
 
   it('runPipeline should execute all 5 stages and produce markdown with frontmatter', async () => {

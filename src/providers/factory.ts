@@ -1,18 +1,29 @@
 import { execa } from 'execa';
 import { AgyProvider } from './agy.provider.js';
 import { ApiProvider } from './api.provider.js';
+import { ClaudeProvider } from './claude.provider.js';
 import { CodexProvider } from './codex.provider.js';
 import {
-  isSupportedProvider,
-  PROVIDER_DEFINITIONS,
+  AGENT_DEFINITIONS,
+  API_PROVIDER_DEFINITIONS,
+  isSupportedAgent,
+  isSupportedApiProvider,
+  SUPPORTED_AGENTS,
   SUPPORTED_PROVIDERS,
 } from './definitions.js';
+import { OpenCodeProvider } from './opencode.provider.js';
 import type { LLMProvider } from './types.js';
 
-export { SUPPORTED_PROVIDERS, type SupportedProvider } from './definitions.js';
+export {
+  type ApiProviderType,
+  SUPPORTED_AGENTS,
+  SUPPORTED_PROVIDERS,
+  type SupportedAgent,
+} from './definitions.js';
 
 export interface ProviderSelectionOptions {
-  provider: string;
+  agent?: string;
+  provider?: string;
   model?: string;
 }
 
@@ -35,28 +46,56 @@ function requireEnvironment(name: string): void {
 export async function createProvider(
   options: ProviderSelectionOptions,
 ): Promise<LLMProvider> {
-  const { provider, model } = options;
-  const normalized = provider.toLowerCase();
-  if (!isSupportedProvider(normalized)) {
-    throw new Error(
-      `Unknown provider: ${provider}. Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}.`,
-    );
+  const agent = options.agent?.trim();
+  const provider = options.provider?.trim();
+
+  if (agent && provider) {
+    throw new Error('--agent와 --provider는 동시에 사용할 수 없습니다.');
   }
 
-  if (normalized === 'codex' || normalized === 'agy') {
-    const { command } = PROVIDER_DEFINITIONS[normalized];
+  if (!agent && !provider) {
+    throw new Error('--agent 또는 --provider 중 하나를 지정해야 합니다.');
+  }
+
+  if (agent) {
+    const normalized = agent.toLowerCase();
+    if (!isSupportedAgent(normalized)) {
+      throw new Error(
+        `Unknown agent: ${agent}. Supported agents: ${SUPPORTED_AGENTS.join(', ')}.`,
+      );
+    }
+
+    const { command } = AGENT_DEFINITIONS[normalized];
     if (!(await isCommandAvailable(command))) {
       throw new Error(
         `${command} CLI was not found. Please verify that it is installed and available on your PATH.`,
       );
     }
 
-    return normalized === 'codex'
-      ? new CodexProvider(model)
-      : new AgyProvider(model);
+    switch (normalized) {
+      case 'codex':
+        return new CodexProvider(options.model);
+      case 'agy':
+        return new AgyProvider(options.model);
+      case 'claude':
+        return new ClaudeProvider(options.model);
+      case 'opencode':
+        return new OpenCodeProvider(options.model);
+    }
   }
 
-  requireEnvironment(PROVIDER_DEFINITIONS[normalized].environmentVariable);
+  if (!provider) {
+    throw new Error('--agent 또는 --provider 중 하나를 지정해야 합니다.');
+  }
 
-  return new ApiProvider(normalized, model);
+  const normalized = provider.toLowerCase();
+  if (!isSupportedApiProvider(normalized)) {
+    throw new Error(
+      `Unknown provider: ${provider}. Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}.`,
+    );
+  }
+
+  requireEnvironment(API_PROVIDER_DEFINITIONS[normalized].environmentVariable);
+
+  return new ApiProvider(normalized, options.model);
 }
