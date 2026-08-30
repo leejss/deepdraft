@@ -51,7 +51,7 @@ export class CodexProvider implements LocalAgentLLMProvider {
       await execa('codex', args, {
         cwd: tempDir,
         input: prompt,
-        timeout: 600000, // 심층 리서치 및 장문 생성을 위한 10분 타임아웃
+        timeout: 600000,
       });
 
       const result = await fs.readFile(tempOutputFile, 'utf-8');

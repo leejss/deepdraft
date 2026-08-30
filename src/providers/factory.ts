@@ -4,20 +4,20 @@ import { ApiProvider } from './api.provider.js';
 import { ClaudeProvider } from './claude.provider.js';
 import { CodexProvider } from './codex.provider.js';
 import {
-  AGENT_DEFINITIONS,
-  API_PROVIDER_DEFINITIONS,
   isSupportedAgent,
   isSupportedApiProvider,
   SUPPORTED_AGENTS,
-  SUPPORTED_PROVIDERS,
+  SUPPORTED_AGENTS_LIST,
+  SUPPORTED_API_PROVIDERS,
+  SUPPORTED_PROVIDERS_LIST,
 } from './definitions.js';
 import { OpenCodeProvider } from './opencode.provider.js';
 import type { LLMProvider } from './types.js';
 
 export {
   type ApiProviderType,
-  SUPPORTED_AGENTS,
-  SUPPORTED_PROVIDERS,
+  SUPPORTED_AGENTS_LIST,
+  SUPPORTED_PROVIDERS_LIST,
   type SupportedAgent,
 } from './definitions.js';
 
@@ -27,7 +27,7 @@ export interface ProviderSelectionOptions {
   model?: string;
 }
 
-export async function isCommandAvailable(command: string): Promise<boolean> {
+async function isCommandAvailable(command: string): Promise<boolean> {
   try {
     const locator = process.platform === 'win32' ? 'where' : 'which';
     await execa(locator, [command]);
@@ -37,7 +37,7 @@ export async function isCommandAvailable(command: string): Promise<boolean> {
   }
 }
 
-function requireEnvironment(name: string): void {
+function assertEnv(name: string): void {
   if (!process.env[name]) {
     throw new Error(`${name} environment variable is required.`);
   }
@@ -61,11 +61,11 @@ export async function createProvider(
     const normalized = agent.toLowerCase();
     if (!isSupportedAgent(normalized)) {
       throw new Error(
-        `Unknown agent: ${agent}. Supported agents: ${SUPPORTED_AGENTS.join(', ')}.`,
+        `Unknown agent: ${agent}. Supported agents: ${SUPPORTED_AGENTS_LIST.join(', ')}.`,
       );
     }
 
-    const { command } = AGENT_DEFINITIONS[normalized];
+    const { command } = SUPPORTED_AGENTS[normalized];
     if (!(await isCommandAvailable(command))) {
       throw new Error(
         `${command} CLI was not found. Please verify that it is installed and available on your PATH.`,
@@ -91,11 +91,10 @@ export async function createProvider(
   const normalized = provider.toLowerCase();
   if (!isSupportedApiProvider(normalized)) {
     throw new Error(
-      `Unknown provider: ${provider}. Supported providers: ${SUPPORTED_PROVIDERS.join(', ')}.`,
+      `Unknown provider: ${provider}. Supported providers: ${SUPPORTED_PROVIDERS_LIST.join(', ')}.`,
     );
   }
 
-  requireEnvironment(API_PROVIDER_DEFINITIONS[normalized].environmentVariable);
-
+  assertEnv(SUPPORTED_API_PROVIDERS[normalized].environmentVariable);
   return new ApiProvider(normalized, options.model);
 }

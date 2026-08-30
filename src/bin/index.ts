@@ -3,7 +3,10 @@ import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
 import { handleWrite, resolveWriteInput } from '../commands/write.js';
 import { SUPPORTED_LANGUAGES } from '../core/language.js';
-import { SUPPORTED_AGENTS, SUPPORTED_PROVIDERS } from '../providers/factory.js';
+import {
+  SUPPORTED_AGENTS_LIST,
+  SUPPORTED_PROVIDERS_LIST,
+} from '../providers/factory.js';
 import { logger } from '../utils/logger.js';
 
 dotenv.config();
@@ -28,17 +31,17 @@ program
   .addOption(
     new Option(
       '--agent <name>',
-      `local agent to use (${SUPPORTED_AGENTS.join(', ')})`,
+      `local agent to use (${SUPPORTED_AGENTS_LIST.join(', ')})`,
     )
-      .choices([...SUPPORTED_AGENTS])
+      .choices([...SUPPORTED_AGENTS_LIST])
       .conflicts('provider'),
   )
   .addOption(
     new Option(
       '-p, --provider <name>',
-      `API provider to use (${SUPPORTED_PROVIDERS.join(', ')})`,
+      `API provider to use (${SUPPORTED_PROVIDERS_LIST.join(', ')})`,
     )
-      .choices([...SUPPORTED_PROVIDERS])
+      .choices([...SUPPORTED_PROVIDERS_LIST])
       .conflicts('agent'),
   )
   .addOption(
