@@ -1,5 +1,5 @@
 import { keysOf } from '../utils/values.js';
-import { SOUL_PROMPT_CONTEXT } from './soul-prompt.js';
+import type { Level } from './stages/types.js';
 
 export const LANGUAGE_DEFINITIONS = {
   ko: { name: 'Korean' },
@@ -9,10 +9,6 @@ export const LANGUAGE_DEFINITIONS = {
 export type OutputLanguage = keyof typeof LANGUAGE_DEFINITIONS;
 
 export const SUPPORTED_LANGUAGES = keysOf(LANGUAGE_DEFINITIONS);
-
-export interface StageOptions {
-  language: OutputLanguage;
-}
 
 function isOutputLanguage(value: string): value is OutputLanguage {
   return Object.hasOwn(LANGUAGE_DEFINITIONS, value);
@@ -28,15 +24,20 @@ export function parseOutputLanguage(value: string): OutputLanguage {
   );
 }
 
-export function createPromptContext(language: OutputLanguage): string {
+export function createPromptContext(
+  language: OutputLanguage,
+  soulPrompt: string,
+  level: Level = 'intermediate',
+): string {
   const languageName = LANGUAGE_DEFINITIONS[language].name;
   const languageInstruction = [
     'Output language policy:',
     `- Write all reader-facing prose in ${languageName}.`,
+    `- Calibrate explanations, terminology, and code detail for ${level}-level readers.`,
     '- Preserve code, commands, URLs, identifiers, product names, and verbatim quotations.',
     '- Keep JSON property names and YAML frontmatter keys exactly as specified.',
     '- Keep the selected output language unchanged throughout planning, drafting, revision, and metadata generation.',
   ].join('\n');
 
-  return `${SOUL_PROMPT_CONTEXT.trim()}\n\n${languageInstruction}`;
+  return `${soulPrompt.trim()}\n\n${languageInstruction}`;
 }

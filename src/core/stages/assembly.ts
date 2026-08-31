@@ -1,10 +1,11 @@
 import matter from 'gray-matter';
 import { z } from 'zod';
+import { generateStructured } from '../../providers/structured.js';
 import type { LLMProvider } from '../../providers/types.js';
 import { formatLocalDate } from '../../utils/date.js';
-import { generateStructured } from '../../utils/structured.js';
-import { createPromptContext, type StageOptions } from '../language.js';
+import { createPromptContext } from '../language.js';
 import type { AngleResult } from './angle.js';
+import type { StageContext } from './types.js';
 
 export interface FrontmatterData {
   title: string;
@@ -53,7 +54,7 @@ export async function assembleMarkdown(
   angle: AngleResult,
   polishedBody: string,
   provider: LLMProvider,
-  options: StageOptions,
+  context: StageContext,
 ): Promise<AssemblyResult> {
   const today = formatLocalDate();
   const readingTime = calculateReadingTime(polishedBody);
@@ -80,26 +81,19 @@ ${polishedBody.slice(0, 1000)}
 }
 `;
 
-  const fallbackDescription =
-    options.language === 'ko'
-      ? `${angle.title}에 대한 심층 분석 및 실무 가이드`
-      : `An in-depth analysis and practical guide to ${angle.title}`;
-
   const metadata = await generateStructured({
     provider,
     prompt,
-    promptContext: createPromptContext(options.language),
+    promptContext: createPromptContext(
+      context.language,
+      context.soulPrompt,
+      context.level,
+    ),
     generateOptions: {
       temperature: 0.3,
       jsonSchema: metadataJsonSchema,
     },
     schema: metadataSchema,
-    fallback: {
-      title: angle.title,
-      description: fallbackDescription,
-      tags: ['Engineering', 'Tech'],
-      category: 'Engineering',
-    },
   });
 
   const frontmatter: FrontmatterData = {

@@ -8,6 +8,7 @@ import {
   parseOutputLanguage,
 } from '../src/core/language.js';
 import { runPipeline } from '../src/core/pipeline.js';
+import { loadSoulPrompt } from '../src/core/soul-prompt.js';
 import { lintAndPolish } from '../src/core/stages/lint.js';
 import { generateOutline } from '../src/core/stages/outline.js';
 import { AgyProvider } from '../src/providers/agy.provider.js';
@@ -29,6 +30,7 @@ vi.mock('execa', () => ({
 }));
 
 const temporaryDirectories: string[] = [];
+const TEST_SOUL_PROMPT = '# Test Soul\n\nWrite with deliberate precision.';
 
 afterEach(async () => {
   await Promise.all(
@@ -47,8 +49,11 @@ class MockProvider implements LocalAgentLLMProvider {
   public readonly kind = 'local-agent' as const;
   public readonly id = 'mock';
   public readonly name = 'Mock Provider';
+  public readonly prompts: string[] = [];
 
   async generate(prompt: string, _options?: GenerateOptions): Promise<string> {
+    this.prompts.push(prompt);
+
     if (prompt.includes('design the most appropriate direction')) {
       return JSON.stringify({
         title: 'PostgreSQL MVCC 동작 원리와 Vacuum 튜닝',
@@ -56,8 +61,6 @@ class MockProvider implements LocalAgentLLMProvider {
           '트랜잭션 격리 보장과 Dead Tuple 증가로 인한 테이블 블로트',
         targetAngle:
           'Read Committed와 Repeatable Read 격리 수준에서의 스냅샷 생성 및 가비지 수거',
-        narrativeArchetype: '런타임 딥다이브',
-        narrativeStrategy: '문제 정의 및 내부 메커니즘 분석',
         keyQuestions: [
           '스냅샷은 어떻게 동작하는가?',
           'Vacuum은 어떤 시점에 락을 유발하는가?',
@@ -68,7 +71,6 @@ class MockProvider implements LocalAgentLLMProvider {
     if (prompt.includes('Design an article blueprint')) {
       return JSON.stringify({
         title: 'PostgreSQL MVCC 동작 원리와 Vacuum 튜닝',
-        narrativeArchetype: '런타임 딥다이브',
         sections: [
           {
             heading: '문제의 발단: Dead Tuple과 테이블 블로트',
@@ -226,11 +228,53 @@ describe('DeepDraft Core Tests', () => {
     expect(parseOutputLanguage('en')).toBe('en');
     expect(() => parseOutputLanguage('auto')).toThrow('Unsupported language');
     expect(() => parseOutputLanguage('ja')).toThrow('Unsupported language');
-    expect(createPromptContext('en')).toContain(
+    expect(createPromptContext('en', TEST_SOUL_PROMPT)).toContain(
       'Write all reader-facing prose in English',
     );
-    expect(createPromptContext('ko')).toContain(
+    expect(createPromptContext('ko', TEST_SOUL_PROMPT)).toContain(
       'Write all reader-facing prose in Korean',
+    );
+    expect(createPromptContext('en', TEST_SOUL_PROMPT)).toContain(
+      TEST_SOUL_PROMPT,
+    );
+    expect(createPromptContext('en', TEST_SOUL_PROMPT)).not.toContain(
+      '# Soul of DeepDraft',
+    );
+  });
+
+  it('loads the default Soul or an explicit absolute or relative path', async () => {
+    const defaultSoul = await loadSoulPrompt();
+    expect(defaultSoul).toContain('# Soul of DeepDraft');
+
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'deepdraft-soul-test-'),
+    );
+    temporaryDirectories.push(directory);
+    const soulPath = path.join(directory, 'backend.md');
+    await fs.writeFile(soulPath, `  ${TEST_SOUL_PROMPT}\n`, 'utf-8');
+
+    await expect(loadSoulPrompt(soulPath)).resolves.toBe(TEST_SOUL_PROMPT);
+    await expect(
+      loadSoulPrompt(path.relative(process.cwd(), soulPath)),
+    ).resolves.toBe(TEST_SOUL_PROMPT);
+  });
+
+  it('rejects an unreadable, empty, or blank custom Soul path', async () => {
+    const directory = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'deepdraft-soul-test-'),
+    );
+    temporaryDirectories.push(directory);
+    const emptySoulPath = path.join(directory, 'empty.md');
+    await fs.writeFile(emptySoulPath, '  \n', 'utf-8');
+
+    await expect(
+      loadSoulPrompt(path.join(directory, 'missing.md')),
+    ).rejects.toThrow('Soul 파일을 읽을 수 없습니다');
+    await expect(loadSoulPrompt(emptySoulPath)).rejects.toThrow(
+      'Soul 파일이 비어 있습니다',
+    );
+    await expect(loadSoulPrompt('  ')).rejects.toThrow(
+      'Soul 파일 경로가 비어 있습니다',
     );
   });
 
@@ -246,7 +290,11 @@ describe('DeepDraft Core Tests', () => {
     const result = await lintAndPolish(
       '# 초안\n\n처리량이 26.2% 감소했다.',
       provider,
-      { language: 'ko' },
+      {
+        language: 'ko',
+        level: 'intermediate',
+        soulPrompt: TEST_SOUL_PROMPT,
+      },
     );
 
     expect(result).toBe('# 검토된 글');
@@ -442,10 +490,18 @@ describe('DeepDraft Core Tests', () => {
       input: 'PostgreSQL MVCC와 Vacuum',
       provider: mockProvider,
       language: 'ko',
+      soulPrompt: TEST_SOUL_PROMPT,
       onProgress: (step) => progressSteps.push(step),
     });
 
     expect(progressSteps).toEqual([1, 2, 3, 4, 5]);
+    expect(mockProvider.prompts).toHaveLength(5);
+    expect(
+      mockProvider.prompts.every((prompt) => prompt.includes(TEST_SOUL_PROMPT)),
+    ).toBe(true);
+    expect(mockProvider.prompts[0]).toContain(
+      'Do not impose a fixed article format',
+    );
     expect(result.frontmatter.title).toBe(
       'PostgreSQL MVCC 동작 원리와 Vacuum 튜닝',
     );
@@ -458,7 +514,7 @@ describe('DeepDraft Core Tests', () => {
     expect(result.markdown).toContain('```mermaid');
   });
 
-  it('generateOutline should retry invalid structured output and use a safe fallback', async () => {
+  it('generateOutline should retry invalid structured output and then fail', async () => {
     const generate = vi.fn().mockResolvedValue('{"sections":[null]}');
     const provider: LocalAgentLLMProvider = {
       kind: 'local-agent',
@@ -467,24 +523,24 @@ describe('DeepDraft Core Tests', () => {
       generate,
     };
 
-    const result = await generateOutline(
-      {
-        title: '테스트 글',
-        coreProblem: '핵심 문제',
-        targetAngle: '분석 관점',
-        narrativeArchetype: '심층 분석',
-        narrativeStrategy: '원인 추적',
-        keyQuestions: [],
-      },
-      provider,
-      { language: 'ko' },
-    );
+    await expect(
+      generateOutline(
+        {
+          title: '테스트 글',
+          coreProblem: '핵심 문제',
+          targetAngle: '분석 관점',
+          keyQuestions: [],
+        },
+        provider,
+        {
+          language: 'ko',
+          level: 'intermediate',
+          soulPrompt: TEST_SOUL_PROMPT,
+        },
+      ),
+    ).rejects.toThrow('Structured generation failed after all attempts');
 
     expect(generate).toHaveBeenCalledTimes(2);
-    expect(result.sections).toHaveLength(3);
-    expect(result.sections.every((section) => section.heading.length > 0)).toBe(
-      true,
-    );
   });
 
   it('saveMarkdownFile should protect explicit output unless force is set', async () => {

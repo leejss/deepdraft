@@ -1,16 +1,22 @@
 import type { LLMProvider } from '../providers/types.js';
-import type { OutputLanguage, StageOptions } from './language.js';
+import type { OutputLanguage } from './language.js';
 import { type AngleResult, extractAngle } from './stages/angle.js';
 import { type AssemblyResult, assembleMarkdown } from './stages/assembly.js';
 import { draftContent } from './stages/draft.js';
 import { lintAndPolish } from './stages/lint.js';
 import { generateOutline, type OutlineResult } from './stages/outline.js';
+import {
+  DEFAULT_LEVEL,
+  type Level,
+  type StageContext,
+} from './stages/types.js';
 
 export interface PipelineOptions {
   input: string;
   provider: LLMProvider;
-  style?: string;
   language: OutputLanguage;
+  level?: Level;
+  soulPrompt: string;
   onProgress?: (step: number, title: string, detail?: string) => void;
 }
 
@@ -24,8 +30,15 @@ export interface PipelineResult {
 export async function runPipeline(
   options: PipelineOptions,
 ): Promise<PipelineResult> {
-  const { input, provider, style, language, onProgress } = options;
-  const stageOptions: StageOptions = { language };
+  const {
+    input,
+    provider,
+    language,
+    level = DEFAULT_LEVEL,
+    soulPrompt,
+    onProgress,
+  } = options;
+  const stageContext: StageContext = { language, level, soulPrompt };
 
   // Step 1: Analyze the topic and define the article direction
   onProgress?.(
@@ -33,15 +46,15 @@ export async function runPipeline(
     'Analyzing the topic and defining direction...',
     'Identifying the strongest narrative angle and story arc for this topic',
   );
-  const angle = await extractAngle(input, provider, stageOptions, style);
+  const angle = await extractAngle(input, provider, stageContext);
 
   // Step 2: Design a tailored outline and article blueprint
   onProgress?.(
     2,
-    `Building the article blueprint... [Archetype: ${angle.narrativeArchetype}]`,
+    'Building the article blueprint...',
     `"${angle.title}" — planning the section structure and key takeaways`,
   );
-  const outline = await generateOutline(angle, provider, stageOptions);
+  const outline = await generateOutline(angle, provider, stageContext);
 
   // Step 3: Draft the article section by section
   onProgress?.(
@@ -49,7 +62,7 @@ export async function runPipeline(
     'Drafting article sections...',
     `Writing ${outline.sections.length} tailored sections with diagrams and practical code`,
   );
-  const draft = await draftContent(angle, outline, provider, stageOptions);
+  const draft = await draftContent(angle, outline, provider, stageContext);
 
   // Step 4: Review technical accuracy, clarity, and completeness
   onProgress?.(
@@ -57,7 +70,7 @@ export async function runPipeline(
     'Reviewing technical accuracy and clarity...',
     'Checking unsupported claims, improving readability, and refining the article voice',
   );
-  const polished = await lintAndPolish(draft, provider, stageOptions);
+  const polished = await lintAndPolish(draft, provider, stageContext);
 
   // Step 5: Assemble the final Markdown and frontmatter
   onProgress?.(
@@ -69,7 +82,7 @@ export async function runPipeline(
     angle,
     polished,
     provider,
-    stageOptions,
+    stageContext,
   );
 
   return {

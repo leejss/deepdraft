@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { generateStructured } from '../../providers/structured.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { generateStructured } from '../../utils/structured.js';
-import { createPromptContext, type StageOptions } from '../language.js';
+import { createPromptContext } from '../language.js';
 import type { AngleResult } from './angle.js';
+import type { StageContext } from './types.js';
 
 export interface SectionBlueprint {
   heading: string;
@@ -15,7 +16,6 @@ export interface SectionBlueprint {
 
 export interface OutlineResult {
   title: string;
-  narrativeArchetype: string;
   sections: SectionBlueprint[];
 }
 
@@ -30,17 +30,15 @@ const sectionSchema = z.object({
 
 const outlineSchema = z.object({
   title: z.string().trim().min(1),
-  narrativeArchetype: z.string().trim().min(1),
   sections: z.array(sectionSchema).min(1),
 });
 
 const outlineJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'narrativeArchetype', 'sections'],
+  required: ['title', 'sections'],
   properties: {
     title: { type: 'string', minLength: 1 },
-    narrativeArchetype: { type: 'string', minLength: 1 },
     sections: {
       type: 'array',
       minItems: 1,
@@ -71,7 +69,7 @@ const outlineJsonSchema = {
 export async function generateOutline(
   angle: AngleResult,
   provider: LLMProvider,
-  options: StageOptions,
+  context: StageContext,
 ): Promise<OutlineResult> {
   const prompt = `
 Design an article blueprint that best fits the analyzed direction below.
@@ -79,8 +77,6 @@ Design an article blueprint that best fits the analyzed direction below.
 [Article]
 - Title: ${angle.title}
 - Core perspective: ${angle.targetAngle}
-- Narrative archetype: ${angle.narrativeArchetype}
-- Narrative strategy: ${angle.narrativeStrategy}
 - Key questions:
 ${angle.keyQuestions.map((q, _i) => `  - ${q}`).join('\n')}
 
@@ -93,7 +89,6 @@ Respond with JSON matching this shape:
 
 {
   "title": "${angle.title}",
-  "narrativeArchetype": "${angle.narrativeArchetype}",
   "sections": [
     {
       "heading": "Section heading",
@@ -107,75 +102,18 @@ Respond with JSON matching this shape:
 }
 `;
 
-  const fallbackSections =
-    options.language === 'ko'
-      ? [
-          {
-            heading: '도입: 문제의 발단과 배경',
-            narrativeFlow: angle.coreProblem,
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
-          },
-          {
-            heading: '심층 분석: 내부 동작 메커니즘',
-            narrativeFlow: angle.targetAngle,
-            hasMermaid: true,
-            mermaidDescription: '핵심 동작 시퀀스 흐름도',
-            hasCode: true,
-            codeDescription: '핵심 코드 스니펫',
-          },
-          {
-            heading: '실무 인사이트 및 결론',
-            narrativeFlow: '실무 적용 기준 및 결론',
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
-          },
-        ]
-      : [
-          {
-            heading: 'Introduction: Problem and context',
-            narrativeFlow: angle.coreProblem,
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
-          },
-          {
-            heading: 'Deep dive: Internal mechanisms',
-            narrativeFlow: angle.targetAngle,
-            hasMermaid: true,
-            mermaidDescription: 'Sequence of the core mechanism',
-            hasCode: true,
-            codeDescription: 'Focused implementation example',
-          },
-          {
-            heading: 'Practical implications and conclusion',
-            narrativeFlow:
-              'Decision criteria, practical guidance, and conclusion',
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
-          },
-        ];
-
   return generateStructured({
     provider,
     prompt,
-    promptContext: createPromptContext(options.language),
+    promptContext: createPromptContext(
+      context.language,
+      context.soulPrompt,
+      context.level,
+    ),
     generateOptions: {
       temperature: 0.6,
       jsonSchema: outlineJsonSchema,
     },
     schema: outlineSchema,
-    fallback: {
-      title: angle.title,
-      narrativeArchetype: angle.narrativeArchetype,
-      sections: fallbackSections,
-    },
   });
 }

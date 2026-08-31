@@ -3,6 +3,7 @@ import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
 import { handleWrite, resolveWriteInput } from '../commands/write.js';
 import { SUPPORTED_LANGUAGES } from '../core/language.js';
+import { SUPPORTED_LEVELS } from '../core/stages/types.js';
 import {
   SUPPORTED_AGENTS_LIST,
   SUPPORTED_PROVIDERS_LIST,
@@ -49,12 +50,13 @@ program
       .choices([...SUPPORTED_LANGUAGES])
       .makeOptionMandatory(),
   )
-  .option('-m, --model <name>', 'model to use with the selected backend')
-  .option(
-    '-s, --style <type>',
-    'writing style hint (deep-dive, troubleshooting, architecture-compare)',
-    'deep-dive',
+  .addOption(
+    new Option('--level <level>', 'reader experience level')
+      .choices([...SUPPORTED_LEVELS])
+      .default('intermediate'),
   )
+  .option('-m, --model <name>', 'model to use with the selected backend')
+  .option('--soul <path>', 'custom Soul Markdown path')
   .option('--force', 'overwrite an existing output file', false)
   .action(async (topic, options) => {
     const input = resolveWriteInput(topic, options.file);

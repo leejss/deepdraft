@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import { generateWithProvider } from '../providers/generate.js';
-import type { GenerateOptions, LLMProvider } from '../providers/types.js';
+import { generateWithProvider } from './generate.js';
+import type { GenerateOptions, LLMProvider } from './types.js';
 
 function extractJson(response: string): unknown {
   const withoutFence = response
@@ -22,7 +22,6 @@ export async function generateStructured<T>(options: {
   generateOptions: GenerateOptions;
   promptContext?: string;
   schema: z.ZodType<T>;
-  fallback: T;
   attempts?: number;
 }): Promise<T> {
   const {
@@ -31,7 +30,6 @@ export async function generateStructured<T>(options: {
     generateOptions,
     promptContext,
     schema,
-    fallback,
     attempts = 2,
   } = options;
 
@@ -60,5 +58,5 @@ export async function generateStructured<T>(options: {
     }
   }
 
-  return fallback;
+  throw new Error('Structured generation failed after all attempts');
 }

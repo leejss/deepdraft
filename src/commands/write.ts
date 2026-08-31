@@ -1,5 +1,7 @@
 import { parseOutputLanguage } from '../core/language.js';
 import { runPipeline } from '../core/pipeline.js';
+import { loadSoulPrompt } from '../core/soul-prompt.js';
+import type { Level } from '../core/stages/types.js';
 import { createProvider } from '../providers/factory.js';
 import { readInputFile, saveMarkdownFile } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
@@ -9,8 +11,9 @@ export interface WriteCommandOptions {
   agent?: string;
   provider?: string;
   model?: string;
-  style?: string;
+  soul?: string;
   language: string;
+  level?: Level;
   force?: boolean;
 }
 
@@ -61,6 +64,8 @@ export async function handleWrite(
       throw new Error('The input file is empty.');
     }
 
+    const soulPrompt = await loadSoulPrompt(options.soul);
+
     const provider = await createProvider({
       agent: options.agent,
       provider: options.provider,
@@ -72,8 +77,9 @@ export async function handleWrite(
     const result = await runPipeline({
       input: rawInput,
       provider,
-      style: options.style,
       language: parseOutputLanguage(options.language),
+      level: options.level,
+      soulPrompt,
       onProgress: (step, title, detail) => {
         logger.startStep(step, 5, title);
         if (detail) {

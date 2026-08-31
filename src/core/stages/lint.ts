@@ -1,11 +1,12 @@
 import { generateWithProvider } from '../../providers/generate.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { createPromptContext, type StageOptions } from '../language.js';
+import { createPromptContext } from '../language.js';
+import type { StageContext } from './types.js';
 
 export async function lintAndPolish(
   draft: string,
   provider: LLMProvider,
-  options: StageOptions,
+  context: StageContext,
 ): Promise<string> {
   const prompt = `
 Revise the following technical article as a rigorous technical editor. Treat every factual claim in the draft as unverified until the draft itself provides enough support. Improve readability and completeness without changing its output language.
@@ -48,7 +49,7 @@ Silently perform every check above. Return only the revised Markdown article bod
       temperature: 0.2,
       maxTokens: 8000,
     },
-    createPromptContext(options.language),
+    createPromptContext(context.language, context.soulPrompt, context.level),
   );
 
   return response.trim();

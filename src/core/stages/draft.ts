@@ -1,21 +1,21 @@
 import { generateWithProvider } from '../../providers/generate.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { createPromptContext, type StageOptions } from '../language.js';
+import { createPromptContext } from '../language.js';
 import type { AngleResult } from './angle.js';
 import type { OutlineResult } from './outline.js';
+import type { StageContext } from './types.js';
 
 export async function draftContent(
   angle: AngleResult,
   outline: OutlineResult,
   provider: LLMProvider,
-  options: StageOptions,
+  context: StageContext,
 ): Promise<string> {
   const prompt = `
 Write a complete, engaging, and technically substantial article from the blueprint below.
 
 [Article]
 - Title: ${outline.title}
-- Narrative archetype: ${outline.narrativeArchetype}
 - Core perspective: ${angle.targetAngle}
 
 [Blueprint]
@@ -46,7 +46,7 @@ Return only the Markdown article body, beginning with the level-one title. Do no
       temperature: 0.7,
       maxTokens: 8000,
     },
-    createPromptContext(options.language),
+    createPromptContext(context.language, context.soulPrompt, context.level),
   );
 
   return response.trim();
