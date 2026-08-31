@@ -57,6 +57,15 @@ export class Logger {
     console.error(chalk.red('✖ ') + chalk.bold(message));
   }
 
+  log(value: unknown): void {
+    const shouldRestartSpinner = this.spinner?.isSpinning ?? false;
+    this.spinner?.stop();
+    console.log(value);
+    if (shouldRestartSpinner) {
+      this.spinner?.start();
+    }
+  }
+
   box(title: string, contents: { [key: string]: string }): void {
     console.log(`\n${chalk.bold.cyan(`✨ ${title}`)}`);
     console.log(chalk.dim('─'.repeat(50)));

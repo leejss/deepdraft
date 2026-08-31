@@ -1,7 +1,7 @@
 import { generateWithProvider } from '../../providers/generate.js';
 import type { LLMProvider } from '../../providers/types.js';
-import { createPromptContext } from '../language.js';
 import type { AngleResult } from './angle.js';
+import { createPromptContext } from './context.js';
 import type { OutlineResult } from './outline.js';
 import type { StageContext } from './types.js';
 
@@ -23,9 +23,8 @@ ${outline.sections
   .map(
     (s) => `
 ## ${s.heading}
+- Key takeaway: ${s.tldr}
 - Narrative purpose: ${s.narrativeFlow}
-${s.hasMermaid ? `- [Diagram]: ${s.mermaidDescription}` : ''}
-${s.hasCode ? `- [Code]: ${s.codeDescription}` : ''}
 `,
   )
   .join('\n')}
@@ -33,7 +32,7 @@ ${s.hasCode ? `- [Code]: ${s.codeDescription}` : ''}
 [Writing guidance]
 - Use a clear, direct, and professional peer-to-peer voice.
 - Open with a concrete problem, observation, or question rather than generic background.
-- Keep diagrams and code focused on improving understanding.
+- Use diagrams or code only where they materially improve understanding.
 - End in a way that fits the article instead of applying a fixed conclusion template.
 
 Return only the Markdown article body, beginning with the level-one title. Do not include frontmatter.
@@ -46,7 +45,7 @@ Return only the Markdown article body, beginning with the level-one title. Do no
       temperature: 0.7,
       maxTokens: 8000,
     },
-    createPromptContext(context.language, context.soulPrompt, context.level),
+    createPromptContext(context),
   );
 
   return response.trim();

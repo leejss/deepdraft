@@ -3,12 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { execa } from 'execa';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createPromptContext,
-  parseOutputLanguage,
-} from '../src/core/language.js';
+import { parseOutputLanguage } from '../src/core/language.js';
 import { runPipeline } from '../src/core/pipeline.js';
 import { loadSoulPrompt } from '../src/core/soul-prompt.js';
+import { createPromptContext } from '../src/core/stages/context.js';
 import { lintAndPolish } from '../src/core/stages/lint.js';
 import { generateOutline } from '../src/core/stages/outline.js';
 import { AgyProvider } from '../src/providers/agy.provider.js';
@@ -24,6 +22,7 @@ import type {
 } from '../src/providers/types.js';
 import { formatLocalDate } from '../src/utils/date.js';
 import { saveMarkdownFile, slugify } from '../src/utils/file.js';
+import { logger } from '../src/utils/logger.js';
 
 vi.mock('execa', () => ({
   execa: vi.fn().mockResolvedValue({ stdout: '' }),
@@ -74,28 +73,19 @@ class MockProvider implements LocalAgentLLMProvider {
         sections: [
           {
             heading: '문제의 발단: Dead Tuple과 테이블 블로트',
+            tldr: 'MVCC의 UPDATE 방식은 Dead Tuple과 테이블 블로트를 만든다.',
             narrativeFlow: 'UPDATE 시 새 튜플 생성 및 xmin/xmax 헤더 메커니즘',
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
           },
           {
             heading: 'MVCC 내부 메커니즘 딥다이브',
+            tldr: '스냅샷과 가시성 판정이 각 트랜잭션에 보이는 튜플을 결정한다.',
             narrativeFlow: 'Snapshot isolation 및 Visibility map',
-            hasMermaid: true,
-            mermaidDescription: '스냅샷 생성 및 튜플 가시성 판별 시퀀스',
-            hasCode: true,
-            codeDescription: '튜플 헤더 구조체 스니펫',
           },
           {
             heading: 'Vacuum 튜닝과 실무 인사이트',
+            tldr: 'Vacuum 튜닝은 트랜잭션 수명과 정리 비용을 함께 고려해야 한다.',
             narrativeFlow:
               'autovacuum_vacuum_cost_limit 조정 및 Long-running transaction의 위험',
-            hasMermaid: false,
-            mermaidDescription: '',
-            hasCode: false,
-            codeDescription: '',
           },
         ],
       });
@@ -228,18 +218,31 @@ describe('DeepDraft Core Tests', () => {
     expect(parseOutputLanguage('en')).toBe('en');
     expect(() => parseOutputLanguage('auto')).toThrow('Unsupported language');
     expect(() => parseOutputLanguage('ja')).toThrow('Unsupported language');
-    expect(createPromptContext('en', TEST_SOUL_PROMPT)).toContain(
+    expect(
+      createPromptContext({
+        language: 'en',
+        level: 'intermediate',
+        soulPrompt: TEST_SOUL_PROMPT,
+      }),
+    ).toContain(
       'Write all reader-facing prose in English',
     );
-    expect(createPromptContext('ko', TEST_SOUL_PROMPT)).toContain(
+    expect(
+      createPromptContext({
+        language: 'ko',
+        level: 'intermediate',
+        soulPrompt: TEST_SOUL_PROMPT,
+      }),
+    ).toContain(
       'Write all reader-facing prose in Korean',
     );
-    expect(createPromptContext('en', TEST_SOUL_PROMPT)).toContain(
-      TEST_SOUL_PROMPT,
-    );
-    expect(createPromptContext('en', TEST_SOUL_PROMPT)).not.toContain(
-      '# Soul of DeepDraft',
-    );
+    const promptContext = createPromptContext({
+      language: 'en',
+      level: 'intermediate',
+      soulPrompt: TEST_SOUL_PROMPT,
+    });
+    expect(promptContext).toContain(TEST_SOUL_PROMPT);
+    expect(promptContext).not.toContain('# Soul of DeepDraft');
   });
 
   it('loads the default Soul or an explicit absolute or relative path', async () => {
@@ -512,6 +515,30 @@ describe('DeepDraft Core Tests', () => {
       'PostgreSQL MVCC 동작 원리와 Vacuum 튜닝',
     );
     expect(result.markdown).toContain('```mermaid');
+  });
+
+  it('runPipeline should log each stage result in debug mode', async () => {
+    const log = vi.spyOn(logger, 'log').mockImplementation(() => {});
+
+    await runPipeline({
+      input: 'PostgreSQL MVCC와 Vacuum',
+      provider: new MockProvider(),
+      language: 'ko',
+      soulPrompt: TEST_SOUL_PROMPT,
+      debug: true,
+    });
+
+    expect(log).toHaveBeenCalledTimes(5);
+    expect(log.mock.calls.map(([result]) => result)).toEqual([
+      expect.objectContaining({ targetAngle: expect.any(String) }),
+      expect.objectContaining({ sections: expect.any(Array) }),
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        markdown: expect.any(String),
+        frontmatter: expect.any(Object),
+      }),
+    ]);
   });
 
   it('generateOutline should retry invalid structured output and then fail', async () => {

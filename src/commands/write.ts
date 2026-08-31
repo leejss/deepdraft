@@ -15,6 +15,7 @@ export interface WriteCommandOptions {
   language: string;
   level?: Level;
   force?: boolean;
+  debug?: boolean;
 }
 
 export type WriteInput =
@@ -80,6 +81,7 @@ export async function handleWrite(
       language: parseOutputLanguage(options.language),
       level: options.level,
       soulPrompt,
+      debug: options.debug,
       onProgress: (step, title, detail) => {
         logger.startStep(step, 5, title);
         if (detail) {

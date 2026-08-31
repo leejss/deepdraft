@@ -1,4 +1,5 @@
 import type { LLMProvider } from '../providers/types.js';
+import { logger } from '../utils/logger.js';
 import type { OutputLanguage } from './language.js';
 import { type AngleResult, extractAngle } from './stages/angle.js';
 import { type AssemblyResult, assembleMarkdown } from './stages/assembly.js';
@@ -17,6 +18,7 @@ export interface PipelineOptions {
   language: OutputLanguage;
   level?: Level;
   soulPrompt: string;
+  debug?: boolean;
   onProgress?: (step: number, title: string, detail?: string) => void;
 }
 
@@ -36,6 +38,7 @@ export async function runPipeline(
     language,
     level = DEFAULT_LEVEL,
     soulPrompt,
+    debug = false,
     onProgress,
   } = options;
   const stageContext: StageContext = { language, level, soulPrompt };
@@ -47,6 +50,7 @@ export async function runPipeline(
     'Identifying the strongest narrative angle and story arc for this topic',
   );
   const angle = await extractAngle(input, provider, stageContext);
+  if (debug) logger.log(angle);
 
   // Step 2: Design a tailored outline and article blueprint
   onProgress?.(
@@ -55,6 +59,7 @@ export async function runPipeline(
     `"${angle.title}" — planning the section structure and key takeaways`,
   );
   const outline = await generateOutline(angle, provider, stageContext);
+  if (debug) logger.log(outline);
 
   // Step 3: Draft the article section by section
   onProgress?.(
@@ -63,6 +68,7 @@ export async function runPipeline(
     `Writing ${outline.sections.length} tailored sections with diagrams and practical code`,
   );
   const draft = await draftContent(angle, outline, provider, stageContext);
+  if (debug) logger.log(draft);
 
   // Step 4: Review technical accuracy, clarity, and completeness
   onProgress?.(
@@ -71,6 +77,7 @@ export async function runPipeline(
     'Checking unsupported claims, improving readability, and refining the article voice',
   );
   const polished = await lintAndPolish(draft, provider, stageContext);
+  if (debug) logger.log(polished);
 
   // Step 5: Assemble the final Markdown and frontmatter
   onProgress?.(
@@ -84,6 +91,7 @@ export async function runPipeline(
     provider,
     stageContext,
   );
+  if (debug) logger.log(assembly);
 
   return {
     angle,

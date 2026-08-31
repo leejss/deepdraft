@@ -48,7 +48,7 @@ program
   .addOption(
     new Option('-l, --language <code>', 'output language')
       .choices([...SUPPORTED_LANGUAGES])
-      .makeOptionMandatory(),
+      .default('ko'),
   )
   .addOption(
     new Option('--level <level>', 'reader experience level')
@@ -58,6 +58,7 @@ program
   .option('-m, --model <name>', 'model to use with the selected backend')
   .option('--soul <path>', 'custom Soul Markdown path')
   .option('--force', 'overwrite an existing output file', false)
+  .option('--debug', 'log each pipeline stage result', false)
   .action(async (topic, options) => {
     const input = resolveWriteInput(topic, options.file);
     const { file: _file, ...writeOptions } = options;
