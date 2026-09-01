@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { generateStructured } from '../../providers/structured.js';
-import type { LLMProvider } from '../../providers/types.js';
+import type { LLMProvider } from '../provider.js';
+import { generateStructured } from '../structured.js';
 import { createPromptContext } from './context.js';
 import type { StageContext } from './types.js';
 
@@ -57,10 +57,7 @@ Respond with JSON matching this shape:
     provider,
     prompt,
     promptContext: createPromptContext(context),
-    generateOptions: {
-      temperature: 0.6,
-      jsonSchema: angleJsonSchema,
-    },
+    generateOptions: { jsonSchema: angleJsonSchema },
     schema: angleSchema,
   });
 }

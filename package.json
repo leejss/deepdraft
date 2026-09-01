@@ -1,18 +1,22 @@
 {
   "name": "deepdraft",
   "version": "0.1.0",
-  "description": "Generate polished technical articles in Markdown with local agents or LLM APIs",
+  "description": "Generate polished technical articles in Markdown with Codex",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "bin": {
     "deepdraft": "./dist/bin/index.js"
   },
   "scripts": {
-    "dev": "tsx src/bin/index.ts",
-    "clean": "node --input-type=module -e \"import fs from 'node:fs/promises'; await fs.rm('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc",
+    "dev": "npm run build:packages && tsx src/bin/index.ts",
+    "clean": "node --input-type=module -e \"import fs from 'node:fs/promises'; for (const directory of ['dist', 'packages/core/dist', 'packages/agent-codex/dist']) await fs.rm(directory, { recursive: true, force: true })\"",
+    "build:packages": "npm run build -w @deepdraft/core && npm run build -w @deepdraft/agent-codex",
+    "build": "npm run clean && npm run build:packages && tsc -p tsconfig.json",
     "prepack": "npm run build",
     "start": "node dist/bin/index.js",
-    "test": "vitest run",
+    "test": "npm run build && vitest run",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
@@ -38,17 +42,12 @@
     "soul.md"
   ],
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.1.10",
-    "@ai-sdk/google": "^1.1.17",
-    "@ai-sdk/openai": "^1.1.13",
-    "ai": "^4.1.46",
+    "@deepdraft/agent-codex": "0.1.0",
+    "@deepdraft/core": "0.1.0",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "dotenv": "^16.4.7",
-    "execa": "^9.5.2",
-    "gray-matter": "^4.0.3",
-    "ora": "^8.2.0",
-    "zod": "^3.24.2"
+    "ora": "^8.2.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",

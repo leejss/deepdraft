@@ -1,13 +1,8 @@
 #!/usr/bin/env node
+import { SUPPORTED_LANGUAGES, SUPPORTED_LEVELS } from '@deepdraft/core';
 import { Command, Option } from 'commander';
 import dotenv from 'dotenv';
 import { handleWrite, resolveWriteInput } from '../commands/write.js';
-import { SUPPORTED_LANGUAGES } from '../core/language.js';
-import { SUPPORTED_LEVELS } from '../core/stages/types.js';
-import {
-  SUPPORTED_AGENTS_LIST,
-  SUPPORTED_PROVIDERS_LIST,
-} from '../providers/factory.js';
 import { logger } from '../utils/logger.js';
 
 dotenv.config();
@@ -15,9 +10,7 @@ const program = new Command();
 
 program
   .name('deepdraft')
-  .description(
-    'Generate polished technical articles with local agents or LLM APIs',
-  )
+  .description('Generate polished technical articles with Codex')
   .version('0.1.0');
 
 program
@@ -30,22 +23,6 @@ program
     'output Markdown path (default: ./posts/[date]-[slug].md)',
   )
   .addOption(
-    new Option(
-      '--agent <name>',
-      `local agent to use (${SUPPORTED_AGENTS_LIST.join(', ')})`,
-    )
-      .choices([...SUPPORTED_AGENTS_LIST])
-      .conflicts('provider'),
-  )
-  .addOption(
-    new Option(
-      '-p, --provider <name>',
-      `API provider to use (${SUPPORTED_PROVIDERS_LIST.join(', ')})`,
-    )
-      .choices([...SUPPORTED_PROVIDERS_LIST])
-      .conflicts('agent'),
-  )
-  .addOption(
     new Option('-l, --language <code>', 'output language')
       .choices([...SUPPORTED_LANGUAGES])
       .default('ko'),
@@ -55,7 +32,7 @@ program
       .choices([...SUPPORTED_LEVELS])
       .default('intermediate'),
   )
-  .option('-m, --model <name>', 'model to use with the selected backend')
+  .option('-m, --model <name>', 'Codex model to use')
   .option('--soul <path>', 'custom Soul Markdown path')
   .option('--force', 'overwrite an existing output file', false)
   .option('--debug', 'log each pipeline stage result', false)

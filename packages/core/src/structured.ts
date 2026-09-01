@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import { generateWithProvider } from './generate.js';
-import type { GenerateOptions, LLMProvider } from './types.js';
+import type { GenerateOptions, LLMProvider } from './provider.js';
 
 function extractJson(response: string): unknown {
   const withoutFence = response
@@ -41,10 +41,7 @@ export async function generateStructured<T>(options: {
     const response = await generateWithProvider(
       provider,
       `${prompt}${retryInstruction}`,
-      {
-        ...generateOptions,
-        temperature: attempt === 1 ? generateOptions.temperature : 0.1,
-      },
+      generateOptions,
       promptContext,
     );
 

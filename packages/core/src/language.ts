@@ -1,4 +1,4 @@
-import { keysOf } from '../utils/values.js';
+import { keysOf } from './values.js';
 
 export const LANGUAGE_DEFINITIONS = {
   ko: { name: 'Korean' },

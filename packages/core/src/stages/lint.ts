@@ -1,5 +1,5 @@
-import { generateWithProvider } from '../../providers/generate.js';
-import type { LLMProvider } from '../../providers/types.js';
+import { generateWithProvider } from '../generate.js';
+import type { LLMProvider } from '../provider.js';
 import { createPromptContext } from './context.js';
 import type { StageContext } from './types.js';
 
@@ -45,10 +45,7 @@ Silently perform every check above. Return only the revised Markdown article bod
   const response = await generateWithProvider(
     provider,
     prompt,
-    {
-      temperature: 0.2,
-      maxTokens: 8000,
-    },
+    {},
     createPromptContext(context),
   );
 

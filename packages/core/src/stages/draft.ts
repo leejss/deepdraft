@@ -1,5 +1,5 @@
-import { generateWithProvider } from '../../providers/generate.js';
-import type { LLMProvider } from '../../providers/types.js';
+import { generateWithProvider } from '../generate.js';
+import type { LLMProvider } from '../provider.js';
 import type { AngleResult } from './angle.js';
 import { createPromptContext } from './context.js';
 import type { OutlineResult } from './outline.js';
@@ -41,10 +41,7 @@ Return only the Markdown article body, beginning with the level-one title. Do no
   const response = await generateWithProvider(
     provider,
     prompt,
-    {
-      temperature: 0.7,
-      maxTokens: 8000,
-    },
+    {},
     createPromptContext(context),
   );
 

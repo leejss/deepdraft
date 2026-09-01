@@ -1,8 +1,8 @@
 import matter from 'gray-matter';
 import { z } from 'zod';
-import { generateStructured } from '../../providers/structured.js';
-import type { LLMProvider } from '../../providers/types.js';
-import { formatLocalDate } from '../../utils/date.js';
+import { formatLocalDate } from '../date.js';
+import type { LLMProvider } from '../provider.js';
+import { generateStructured } from '../structured.js';
 import type { AngleResult } from './angle.js';
 import { createPromptContext } from './context.js';
 import type { StageContext } from './types.js';
@@ -85,10 +85,7 @@ ${polishedBody.slice(0, 1000)}
     provider,
     prompt,
     promptContext: createPromptContext(context),
-    generateOptions: {
-      temperature: 0.3,
-      jsonSchema: metadataJsonSchema,
-    },
+    generateOptions: { jsonSchema: metadataJsonSchema },
     schema: metadataSchema,
   });
 

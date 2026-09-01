@@ -1,15 +1,11 @@
-import { parseOutputLanguage } from '../core/language.js';
-import { runPipeline } from '../core/pipeline.js';
-import { loadSoulPrompt } from '../core/soul-prompt.js';
-import type { Level } from '../core/stages/types.js';
-import { createProvider } from '../providers/factory.js';
+import { CodexProvider } from '@deepdraft/agent-codex';
+import { type Level, parseOutputLanguage, runPipeline } from '@deepdraft/core';
+import { loadSoulPrompt } from '../soul-prompt.js';
 import { readInputFile, saveMarkdownFile } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 
 export interface WriteCommandOptions {
   output?: string;
-  agent?: string;
-  provider?: string;
   model?: string;
   soul?: string;
   language: string;
@@ -49,7 +45,7 @@ export function resolveWriteInput(
 
   throw new Error(
     'Provide a topic or specify an input file with the --file option.\n' +
-      'Example: deepdraft write "How PostgreSQL MVCC Works" --agent codex --language en',
+      'Example: deepdraft write "How PostgreSQL MVCC Works" --language en',
   );
 }
 
@@ -67,11 +63,7 @@ export async function handleWrite(
 
     const soulPrompt = await loadSoulPrompt(options.soul);
 
-    const provider = await createProvider({
-      agent: options.agent,
-      provider: options.provider,
-      model: options.model,
-    });
+    const provider = new CodexProvider(options.model);
 
     logger.info(`Using backend: ${provider.name}`);
 
@@ -81,7 +73,7 @@ export async function handleWrite(
       language: parseOutputLanguage(options.language),
       level: options.level,
       soulPrompt,
-      debug: options.debug,
+      onDebug: options.debug ? (result) => logger.log(result) : undefined,
       onProgress: (step, title, detail) => {
         logger.startStep(step, 5, title);
         if (detail) {

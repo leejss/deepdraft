@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { formatLocalDate } from './date.js';
+import { formatLocalDate } from '@deepdraft/core';
 
 export async function readInputFile(filePath: string): Promise<string> {
   const resolved = path.resolve(process.cwd(), filePath);

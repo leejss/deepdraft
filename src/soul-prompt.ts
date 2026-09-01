@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const defaultSoulFile = new URL('../../soul.md', import.meta.url);
+const defaultSoulFile = new URL('../soul.md', import.meta.url);
 
 export async function loadSoulPrompt(soulPath?: string): Promise<string> {
   const customPath = soulPath?.trim();

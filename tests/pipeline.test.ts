@@ -1,32 +1,22 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execa } from 'execa';
+import { type CodexClient, CodexProvider } from '@deepdraft/agent-codex';
+import {
+  createPromptContext,
+  formatLocalDate,
+  type GenerateOptions,
+  generateOutline,
+  generateWithProvider,
+  type LLMProvider,
+  lintAndPolish,
+  parseOutputLanguage,
+  runPipeline,
+} from '@deepdraft/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseOutputLanguage } from '../src/core/language.js';
-import { runPipeline } from '../src/core/pipeline.js';
-import { loadSoulPrompt } from '../src/core/soul-prompt.js';
-import { createPromptContext } from '../src/core/stages/context.js';
-import { lintAndPolish } from '../src/core/stages/lint.js';
-import { generateOutline } from '../src/core/stages/outline.js';
-import { AgyProvider } from '../src/providers/agy.provider.js';
-import { ClaudeProvider } from '../src/providers/claude.provider.js';
-import { CodexProvider } from '../src/providers/codex.provider.js';
-import { createProvider } from '../src/providers/factory.js';
-import { generateWithProvider } from '../src/providers/generate.js';
-import { OpenCodeProvider } from '../src/providers/opencode.provider.js';
-import type {
-  ApiLLMProvider,
-  GenerateOptions,
-  LocalAgentLLMProvider,
-} from '../src/providers/types.js';
-import { formatLocalDate } from '../src/utils/date.js';
+import { loadSoulPrompt } from '../src/soul-prompt.js';
 import { saveMarkdownFile, slugify } from '../src/utils/file.js';
 import { logger } from '../src/utils/logger.js';
-
-vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '' }),
-}));
 
 const temporaryDirectories: string[] = [];
 const TEST_SOUL_PROMPT = '# Test Soul\n\nWrite with deliberate precision.';
@@ -44,8 +34,7 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-class MockProvider implements LocalAgentLLMProvider {
-  public readonly kind = 'local-agent' as const;
+class MockProvider implements LLMProvider {
   public readonly id = 'mock';
   public readonly name = 'Mock Provider';
   public readonly prompts: string[] = [];
@@ -167,52 +156,6 @@ describe('DeepDraft Core Tests', () => {
     );
   });
 
-  it('createProvider should use only the explicitly selected local agent', async () => {
-    const agy = await createProvider({ agent: 'agy' });
-    expect(agy.id).toBe('agy');
-
-    const codex = await createProvider({ agent: 'codex' });
-    expect(codex.id).toBe('codex');
-
-    const claude = await createProvider({ agent: 'claude' });
-    expect(claude.id).toBe('claude');
-
-    const opencode = await createProvider({ agent: 'opencode' });
-    expect(opencode.id).toBe('opencode');
-
-    await expect(createProvider({ agent: 'unknown' })).rejects.toThrow(
-      'Unknown agent',
-    );
-    await expect(createProvider({ provider: 'unknown' })).rejects.toThrow(
-      'Unknown provider',
-    );
-  });
-
-  it('createProvider should require exactly one of agent and provider', async () => {
-    await expect(createProvider({})).rejects.toThrow(
-      '--agent 또는 --provider 중 하나',
-    );
-    await expect(
-      createProvider({ agent: 'codex', provider: 'openai' }),
-    ).rejects.toThrow('--agent와 --provider는 동시에');
-  });
-
-  it('createProvider should require the selected API provider key', async () => {
-    vi.stubEnv('OPENAI_API_KEY', '');
-    await expect(createProvider({ provider: 'openai' })).rejects.toThrow(
-      'OPENAI_API_KEY',
-    );
-  });
-
-  it('createProvider should keep API providers separate from local agents', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'test-api-key');
-
-    const provider = await createProvider({ provider: 'claude' });
-
-    expect(provider.kind).toBe('api');
-    expect(provider.id).toBe('claude');
-  });
-
   it('language should accept only ko and en', () => {
     expect(parseOutputLanguage('ko')).toBe('ko');
     expect(parseOutputLanguage('en')).toBe('en');
@@ -224,18 +167,14 @@ describe('DeepDraft Core Tests', () => {
         level: 'intermediate',
         soulPrompt: TEST_SOUL_PROMPT,
       }),
-    ).toContain(
-      'Write all reader-facing prose in English',
-    );
+    ).toContain('Write all reader-facing prose in English');
     expect(
       createPromptContext({
         language: 'ko',
         level: 'intermediate',
         soulPrompt: TEST_SOUL_PROMPT,
       }),
-    ).toContain(
-      'Write all reader-facing prose in Korean',
-    );
+    ).toContain('Write all reader-facing prose in Korean');
     const promptContext = createPromptContext({
       language: 'en',
       level: 'intermediate',
@@ -283,8 +222,7 @@ describe('DeepDraft Core Tests', () => {
 
   it('lint should enforce evidence and instruction-leakage guardrails in one call', async () => {
     const generate = vi.fn().mockResolvedValue('# 검토된 글');
-    const provider: LocalAgentLLMProvider = {
-      kind: 'local-agent',
+    const provider: LLMProvider = {
       id: 'lint-test',
       name: 'Lint Test Provider',
       generate,
@@ -309,180 +247,60 @@ describe('DeepDraft Core Tests', () => {
     expect(prompt).toContain('A code sample that measures one metric');
     expect(prompt).toContain('system instructions');
     expect(prompt).toContain('Do not append a generic "Next Steps"');
-    expect(options).toMatchObject({ temperature: 0.2, maxTokens: 8000 });
+    expect(options).toEqual({});
     expect(prompt).toContain('Write all reader-facing prose in Korean');
   });
 
-  it('local providers should run in isolated sandboxes without bypass flags', async () => {
-    const execaMock = vi.mocked(execa);
-    execaMock.mockImplementation(async (command, args) => {
-      if (command === 'codex') {
-        const outputIndex = args?.indexOf('-o') ?? -1;
-        const outputFile = args?.[outputIndex + 1];
-        if (outputFile) {
-          await fs.writeFile(outputFile, 'codex result', 'utf-8');
-        }
-      }
-      if (command === 'opencode') {
-        return {
-          stdout: [
-            JSON.stringify({
-              type: 'text',
-              part: { messageID: 'message-1', text: 'opencode result' },
-            }),
-            JSON.stringify({ type: 'step_finish', part: {} }),
-          ].join('\n'),
-        } as Awaited<ReturnType<typeof execa>>;
-      }
-      return {
-        stdout: command === 'claude' ? 'claude result' : 'agy result',
-      } as Awaited<ReturnType<typeof execa>>;
-    });
-
-    const agyResult = await new AgyProvider().generate('테스트');
-    const codexResult = await new CodexProvider().generate('테스트');
-    const claudeResult = await new ClaudeProvider().generate('테스트');
-    const opencodeResult = await new OpenCodeProvider().generate('테스트');
-    const agyCall = execaMock.mock.calls.find(([command]) => command === 'agy');
-    const codexCall = execaMock.mock.calls.find(
-      ([command]) => command === 'codex',
-    );
-    const claudeCall = execaMock.mock.calls.find(
-      ([command]) => command === 'claude',
-    );
-    const opencodeCall = execaMock.mock.calls.find(
-      ([command]) => command === 'opencode',
-    );
-
-    expect(agyResult).toBe('agy result');
-    expect(codexResult).toBe('codex result');
-    expect(claudeResult).toBe('claude result');
-    expect(opencodeResult).toBe('opencode result');
-    expect(agyCall?.[1]).toContain('--sandbox');
-    expect(agyCall?.[1]).not.toContain('--dangerously-skip-permissions');
-    expect(codexCall?.[1]).toContain('read-only');
-    expect(codexCall?.[1]).not.toContain(
-      '--dangerously-bypass-approvals-and-sandbox',
-    );
-    expect(claudeCall?.[1]).toContain('--safe-mode');
-    expect(claudeCall?.[1]).toContain('plan');
-    expect(claudeCall?.[1]).not.toContain('--dangerously-skip-permissions');
-    expect(opencodeCall?.[1]).toContain('--agent');
-    expect(opencodeCall?.[1]).toContain('plan');
-    expect(opencodeCall?.[1]).not.toContain('--auto');
-    expect(agyCall?.[2]?.cwd).toContain('deepdraft-agy-');
-    expect(codexCall?.[2]?.cwd).toContain('deepdraft-codex-');
-    expect(claudeCall?.[2]?.cwd).toContain('deepdraft-claude-');
-    expect(opencodeCall?.[2]?.cwd).toContain('deepdraft-opencode-');
-  });
-
-  it('should route prompt context by provider kind', async () => {
-    const localGenerate = vi.fn().mockResolvedValue('local result');
-    const apiGenerate = vi.fn().mockResolvedValue('api result');
-    const localProvider: LocalAgentLLMProvider = {
-      kind: 'local-agent',
-      id: 'local',
-      name: 'Local Provider',
-      generate: localGenerate,
-    };
-    const apiProvider: ApiLLMProvider = {
-      kind: 'api',
-      id: 'api',
-      name: 'API Provider',
-      generate: apiGenerate,
+  it('Codex SDK should run in an isolated read-only thread', async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValue({ finalResponse: '  codex result  ' });
+    const startThread = vi.fn().mockReturnValue({ run });
+    const client: CodexClient = { startThread };
+    const schema = {
+      type: 'object',
+      required: ['ok'],
+      properties: { ok: { type: 'boolean' } },
     };
 
-    await generateWithProvider(
-      localProvider,
-      'Task',
-      { temperature: 0.2 },
-      'Prompt context',
-    );
-    await generateWithProvider(
-      apiProvider,
-      'Task',
-      { temperature: 0.2 },
-      'Prompt context',
+    const result = await new CodexProvider('gpt-test', client).generate(
+      '테스트',
+      { jsonSchema: schema },
     );
 
-    expect(localGenerate).toHaveBeenCalledWith('Prompt context\n\nTask', {
-      temperature: 0.2,
-    });
-    expect(apiGenerate).toHaveBeenCalledWith('Task', {
-      temperature: 0.2,
-      systemPrompt: 'Prompt context',
-    });
-  });
-
-  it('agy should enable JSON output and unwrap structured responses', async () => {
-    const execaMock = vi.mocked(execa);
-    execaMock.mockResolvedValue({
-      stdout: JSON.stringify({
-        status: 'SUCCESS',
-        structured_output: { ok: true },
+    expect(result).toBe('codex result');
+    expect(startThread).toHaveBeenCalledOnce();
+    expect(startThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-test',
+        sandboxMode: 'read-only',
+        approvalPolicy: 'never',
+        skipGitRepoCheck: true,
+        networkAccessEnabled: false,
+        webSearchMode: 'disabled',
+        workingDirectory: expect.stringContaining('deepdraft-codex-'),
       }),
-    } as Awaited<ReturnType<typeof execa>>);
-
-    const result = await new AgyProvider().generate('테스트', {
-      jsonSchema: {
-        type: 'object',
-        required: ['ok'],
-        properties: { ok: { type: 'boolean' } },
-      },
-    });
-    const agyCall = execaMock.mock.calls.find(([command]) => command === 'agy');
-
-    expect(result).toBe('{"ok":true}');
-    expect(agyCall?.[1]).toContain('--output-format');
-    expect(agyCall?.[1]).toContain('json');
-    expect(agyCall?.[1]).toContain('--json-schema');
-  });
-
-  it('claude should enable JSON schema output and unwrap structured responses', async () => {
-    const execaMock = vi.mocked(execa);
-    execaMock.mockResolvedValue({
-      stdout: JSON.stringify({ structured_output: { ok: true } }),
-    } as Awaited<ReturnType<typeof execa>>);
-
-    const result = await new ClaudeProvider().generate('테스트', {
-      jsonSchema: {
-        type: 'object',
-        required: ['ok'],
-        properties: { ok: { type: 'boolean' } },
-      },
-    });
-    const claudeCall = execaMock.mock.calls.find(
-      ([command]) => command === 'claude',
     );
+    expect(run).toHaveBeenCalledWith('테스트', {
+      outputSchema: schema,
+      signal: expect.any(AbortSignal),
+    });
 
-    expect(result).toBe('{"ok":true}');
-    expect(claudeCall?.[1]).toContain('--output-format');
-    expect(claudeCall?.[1]).toContain('json');
-    expect(claudeCall?.[1]).toContain('--json-schema');
+    const [{ workingDirectory }] = startThread.mock.calls[0];
+    await expect(fs.access(workingDirectory)).rejects.toThrow();
   });
 
-  it('opencode should return text from the final assistant message', async () => {
-    const execaMock = vi.mocked(execa);
-    execaMock.mockResolvedValue({
-      stdout: [
-        JSON.stringify({
-          type: 'text',
-          part: { messageID: 'message-1', text: 'intermediate' },
-        }),
-        JSON.stringify({
-          type: 'text',
-          part: { messageID: 'message-2', text: '{"ok":' },
-        }),
-        JSON.stringify({
-          type: 'text',
-          part: { messageID: 'message-2', text: 'true}' },
-        }),
-      ].join('\n'),
-    } as Awaited<ReturnType<typeof execa>>);
+  it('should prepend prompt context for Codex', async () => {
+    const generate = vi.fn().mockResolvedValue('result');
+    const provider: LLMProvider = {
+      id: 'codex-test',
+      name: 'Codex Test Provider',
+      generate,
+    };
 
-    const result = await new OpenCodeProvider().generate('테스트');
+    await generateWithProvider(provider, 'Task', {}, 'Prompt context');
 
-    expect(result).toBe('{"ok":true}');
+    expect(generate).toHaveBeenCalledWith('Prompt context\n\nTask', {});
   });
 
   it('runPipeline should execute all 5 stages and produce markdown with frontmatter', async () => {
@@ -502,9 +320,6 @@ describe('DeepDraft Core Tests', () => {
     expect(
       mockProvider.prompts.every((prompt) => prompt.includes(TEST_SOUL_PROMPT)),
     ).toBe(true);
-    expect(mockProvider.prompts[0]).toContain(
-      'Do not impose a fixed article format',
-    );
     expect(result.frontmatter.title).toBe(
       'PostgreSQL MVCC 동작 원리와 Vacuum 튜닝',
     );
@@ -525,7 +340,7 @@ describe('DeepDraft Core Tests', () => {
       provider: new MockProvider(),
       language: 'ko',
       soulPrompt: TEST_SOUL_PROMPT,
-      debug: true,
+      onDebug: (result) => logger.log(result),
     });
 
     expect(log).toHaveBeenCalledTimes(5);
@@ -543,8 +358,7 @@ describe('DeepDraft Core Tests', () => {
 
   it('generateOutline should retry invalid structured output and then fail', async () => {
     const generate = vi.fn().mockResolvedValue('{"sections":[null]}');
-    const provider: LocalAgentLLMProvider = {
-      kind: 'local-agent',
+    const provider: LLMProvider = {
       id: 'invalid-mock',
       name: 'Invalid Mock',
       generate,
